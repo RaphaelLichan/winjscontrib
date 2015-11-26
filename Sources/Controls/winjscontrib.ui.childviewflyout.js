@@ -37,7 +37,9 @@
                    this.element.style.display = 'none';
                }
                document.body.appendChild(this.rootElement);
-               this.$element = $(element);
+
+               //tell if internal navigator must register for navigation events
+               this.navigationEvents = options.navigationEvents;
 
                this.element.mcnChildnav = true;
 
@@ -45,7 +47,7 @@
                this.element.classList.add("win-disposable");
                this.rootElement.classList.add("childNavigator");
                this.element.classList.add('mcn-navigation-ctrl');
-               this._createContent();
+               this._createContent(options);
                this.isOpened = false;
                this.hardwareBackBtnPressedBinded = this.hardwareBackBtnPressed.bind(this);
                //this.cancelNavigationBinded = this.cancelNavigation.bind(this);
@@ -54,31 +56,36 @@
             * @lends WinJSContrib.UI.ChildViewFlyout.prototype 
             */
            {
-               _createContent: function () {
+               _createContent: function (options) {
                    var that = this;
+                   var FD = WinJSContrib.UI.FluentDOM;
+                   var overlay = new FD('DIV');
+                   that.overlay = new FD('DIV')
+                       .addClass("childNavigator-overlay")
+                       .appendTo(that.rootElement)
+                       .tap(that.hide.bind(that), { disableAnimation: true })
+                       .element;
 
-                   this.overlay = document.createElement("div");
-                   this.overlay.className = "childNavigator-overlay";
-                   this.$overlay = $(this.overlay);
-                   this.$overlay.removeClass('visible');
-                   this.rootElement.appendChild(this.overlay);
-                   this.$overlay.tap(function () {
-                       that.hide();
-                   }, {
-                       disableAnimation: true
-                   });
-
-                   this.contentPlaceholder = document.createElement("div");
-                   this.contentPlaceholder.className = "childNavigator-contentPlaceholder";
-                   var navigatorElt = document.createElement('DIV');
-                   this.contentPlaceholder.appendChild(navigatorElt);
-                   this.navigator = new WinJSContrib.UI.PageControlNavigator(navigatorElt, { global: false });
-                   this.navigator.hide = function (arg) {
-                       return that.hide(arg);
+                   that.contentPlaceholder = new FD('DIV', "childNavigator-contentPlaceholder", that.rootElement)
+                       .append('DIV', null, function (nav) {
+                           that.navigator = new WinJSContrib.UI.PageControlNavigator(nav.element, { global: false });
+                           that.navigator.animations.enterPage = WinJS.UI.Animation.fadeIn;
+                           that.navigator.hide = function (arg) {
+                               return that.hide(arg);
+                           }
+                       })
+                       .element;
+                   if (options && options.closeBtn && options.closeBtn.active) {
+                       that.closebtn = new FD('DIV', 'mcn-close-btn', that.contentPlaceholder);
+                       if (options.closeBtn.templatetext)
+                           that.closebtn.html(options.closeBtn.templatetext);
+                       if (options.closeBtn.class)
+                           that.closebtn.className(that.closebtn.element.className + " " + options.closeBtn.class);
+                       else if (!options.closeBtn.templatetext) {
+                           that.closebtn.className(that.closebtn.element.className + " default-icon");
+                       }
+                       WinJSContrib.UI.tap(that.closebtn.element, function () { that.closePage(); });
                    }
-                   this.$contentPlaceholder = $(this.contentPlaceholder);
-
-                   this.rootElement.appendChild(this.contentPlaceholder);
                },
 
                /**
@@ -102,12 +109,12 @@
                /**
                 * clear all child view pages
                 */
-               clear: function () {
+               clear: function (forceClose) {
                    var that = this;
                    return new WinJS.Promise(function (complete, error) {
-                       WinJS.Promise.wrap(that.closePage()).done(function () {
+                       WinJS.Promise.wrap(that.closePage(null,null, forceClose)).done(function () {
                            that.navigator.clear();
-                           that.navigator._element.innerText = '';
+                           that.navigator.element.innerText = '';
                            that.location = undefined;
                            complete();
                        });
@@ -117,20 +124,23 @@
                /**
                 * close current page
                 */
-               closePage: function (arg, pageElement) {
+               closePage: function (arg, pageElement, forceClose) {
                    var that = this;
-                   if (!that.canClose()) {
-                       return WinJS.Promise.wrapError();
-                   }
+                   var check = forceClose ? WinJS.Promise.wrap(true) : that.canClose();
+                   return check.then(function (canClose) {
+                       if (!canClose) {
+                           return WinJS.Promise.wrapError();
+                       }
 
-                   if (that.navigator._element.children.length == 1) {
-                       that.hide(arg);
-                   }
+                       if (that.navigator.element.children.length == 1) {
+                           that.hide(arg, null, true);
+                       }
 
-                   that.navigator.triggerPageExit();
-                   return that.navigator.closePage(pageElement).then(function () {
-                       if (WinJSContrib.UI.Application.progress)
-                           WinJSContrib.UI.Application.progress.hide();
+                       that.navigator.triggerPageExit();
+                       return that.navigator.closePage(pageElement).then(function () {
+                           if (WinJSContrib.UI.Application.progress)
+                               WinJSContrib.UI.Application.progress.hide();
+                       });
                    });
                },
 
@@ -157,13 +167,18 @@
 
                hardwareBackBtnPressed: function (arg) {
                    var ctrl = this;
-                   var idx = WinJSContrib.UI.FlyoutPage.openPages.indexOf(ctrl);
-                   if (idx == WinJSContrib.UI.FlyoutPage.openPages.length - 1) {
+                   if (!ctrl.navigator._checkBackNavigation(arg)) {
                        ctrl.hide();
                        arg.handled = true;
-                       if (arg.preventDefault)
-                           arg.preventDefault();
                    }
+
+                   //var idx = WinJSContrib.UI.FlyoutPage.openPages.indexOf(ctrl);
+                   //if (idx == WinJSContrib.UI.FlyoutPage.openPages.length - 1) {
+                   // ctrl.hide();
+                   // arg.handled = true;
+                   // if (arg.preventDefault)
+                   //   arg.preventDefault();
+                   //}
                },
 
                //cancelNavigation: function (args) {
@@ -182,12 +197,15 @@
                        document.body.addEventListener('keyup', that.childContentKeyUp);
                        that.isOpened = true;
 
-                       $(that.rootElement).addClass("visible");
-                       that.$overlay.addClass("visible");
+                       that.rootElement.classList.add("visible");
+                       that.overlay.classList.add("visible");
                        if (!skipshowcontainer)
-                           that.$contentPlaceholder.addClass("visible");
+                           that.contentPlaceholder.classList.add("visible");
 
                        that.navEventsHandler = WinJSContrib.UI.registerNavigationEvents(that, this.hardwareBackBtnPressedBinded);
+                       if (that.navigationEvents) {
+                           that.navigator.addNavigationEvents();
+                       }
                        //WinJS.Navigation.addEventListener('beforenavigate', this.cancelNavigationBinded);
                        //if (window.Windows && window.Windows.Phone)
                        //    Windows.Phone.UI.Input.HardwareButtons.addEventListener("backpressed", this.hardwareBackBtnPressedBinded);
@@ -202,25 +220,29 @@
                pick: function (uri, options, skipHistory) {
                    var ctrl = this;
                    options = options || {};
-
-                   return new WinJS.Promise(function (complete, error) {
+                   ctrl.pickPromises = ctrl.pickPromises || [];
+                   
+                   var pickPromise = new WinJS.Promise(function (complete, error) {
                        var completed = false;
                        var page = null;
 
                        var manageClose = function (arg) {
+                           removePromise();
                            if (page)
                                page.removeEventListener("closing", manageClose);
                            ctrl.removeEventListener("beforehide", manageClose);
                            if (!completed) {
                                completed = true;
                                complete({ completed: false, data: null });
-                           }
+                           }                           
                        };
 
                        options.navigateStacked = true;
                        options.injectToPage = {
                            close: function (arg) {
+                               removePromise();
                                completed = true;
+                               manageClose();
 
                                if (page)
                                    page.removeEventListener("closing", manageClose);
@@ -235,6 +257,8 @@
                            }
                        };
 
+                       var arg = JSON.parse(JSON.stringify(options));
+                       arg.navigateStacked = true;
                        ctrl.open(uri, options, skipHistory).then(function (arg) {
                            page = ctrl.navigator.pageControl;
                            if (page) {
@@ -243,7 +267,20 @@
                            ctrl.addEventListener("beforehide", manageClose, false);
                        });
                    });
+                   var removePromise = function () {
+                       var idx = ctrl.pickPromises.indexOf(pickPromise);
+                       ctrl.pickPromises.splice(idx, 1);
+                   }
+                   ctrl.pickPromises.push(pickPromise);
+                   pickPromise.then(removePromise);
 
+                   //if (this.pickPromise) {
+                   //    this.pickPromise = this.pickPromise.then(function () {
+                   //        return pickPromise;
+                   //    })
+                   //}
+
+                   return pickPromise;
                },
 
                /**
@@ -255,14 +292,14 @@
                 */
                open: function (uri, options, skipHistory) {
                    var that = this;
-                   $(that.rootElement).addClass("visible");
+                   that.rootElement.classList.add("visible");
                    that.dispatchEvent('beforeshow');
-                   that.$overlay.addClass("enter");
-                   that.$contentPlaceholder.addClass("enter");
+                   that.overlay.classList.add("enter");
+                   that.contentPlaceholder.classList.add("enter");
                    return new WinJS.Promise(function (complete, error) {
                        setImmediate(function () {
-                       that.$overlay.addClass("visible");
-                       that.$contentPlaceholder.addClass("visible");
+                           that.overlay.classList.add("visible");
+                           that.contentPlaceholder.classList.add("visible");
 
                            //setImmediate(function () {
                            if (!that.isOpened) {
@@ -276,9 +313,9 @@
                                }, error);
                            });
 
-                           that.$contentPlaceholder.afterTransition(function () {
-                               that.$overlay.removeClass("enter");
-                               that.$contentPlaceholder.removeClass("enter");
+                           WinJSContrib.UI.afterTransition(that.contentPlaceholder).then(function () {
+                               that.overlay.classList.remove("enter");
+                               that.contentPlaceholder.classList.remove("enter");
                            });
                            //});
                        });
@@ -288,56 +325,65 @@
                canClose: function () {
                    var that = this;
                    if (this.navigator.pageControl && this.navigator.pageControl.canClose) {
-                       if (!this.navigator.pageControl.canClose()) {
-                           return false;
-                       }
+                       return WinJS.Promise.as(this.navigator.pageControl.canClose()).then(function (canclose) {
+                           return canclose;
+                       });
                    }
 
-                   return true;
+                   return WinJS.Promise.wrap(true);
                },
 
                /**
                 * close all content and hide child view
                 */
-               hide: function (arg) {
+               hide: function (arg, event, forceClose) {
                    var that = this;
                    if (that.isOpened) {
+                       var check = forceClose ? WinJS.Promise.wrap(true) : that.canClose();
+                       check.then(function (canclose) {
+                           if (!canclose) {
+                               return false;
+                           }
 
-                       if (!that.canClose()) {
-                           return false;
-                       }
-
-                       document.body.removeEventListener('keyup', that.childContentKeyUp);
-                       that.isOpened = false;
-                       that.dispatchEvent('beforehide', arg);
-
-                       if (that.navEventsHandler) {
-                           that.navEventsHandler();
-                           that.navEventsHandler = null;
-                       }
-
-                       that.$overlay.removeClass("enter");
-                       that.$contentPlaceholder.removeClass("enter");
-
-                       if (that.$overlay.hasClass("visible")) {
-                           that.$overlay.addClass("leave");
-                           that.$contentPlaceholder.addClass("leave");
-                           setImmediate(function () {
-                               that.$contentPlaceholder.afterTransition(function () {
-                                   that.clear();
-                                   $(that.rootElement).removeClass('visible');
-                                   that.dispatchEvent('afterhide', arg);
-                                   that.$overlay.removeClass("leave");
-                                   that.$contentPlaceholder.removeClass("leave");
+                           if (that.pickPromises) {
+                               that.pickPromises.forEach(function (p) {
+                                   p.cancel();
                                });
+                           }
 
-                               that.$overlay.removeClass("visible");
-                               that.$contentPlaceholder.removeClass("visible");
+                           document.body.removeEventListener('keyup', that.childContentKeyUp);
+                           that.isOpened = false;
+                           that.dispatchEvent('beforehide', arg);
 
-                           });
-                       }
+                           if (that.navEventsHandler) {
+                               that.navEventsHandler();
+                               that.navigator.removeNavigationEvents();
+                               that.navEventsHandler = null;
+                           }
+
+                           that.overlay.classList.remove("enter");
+                           that.contentPlaceholder.classList.remove("enter");
+
+                           if (that.overlay.classList.contains("visible")) {
+                               that.overlay.classList.add("leave");
+                               that.contentPlaceholder.classList.add("leave");
+                               setImmediate(function () {
+                                   WinJSContrib.UI.afterTransition(that.contentPlaceholder).then(function () {
+                                       that.clear(true);
+                                       that.rootElement.classList.remove('visible');
+                                       that.dispatchEvent('afterhide', arg);
+                                       that.overlay.classList.remove("leave");
+                                       that.contentPlaceholder.classList.remove("leave");
+                                   });
+
+                                   that.overlay.classList.remove("visible");
+                                   that.contentPlaceholder.classList.remove("visible");
+
+                               });
+                           }
+                       });
                    }
-                   return true;
+                   return WinJS.Promise.wrap(true);
                },
 
                dispose: function () {
@@ -345,7 +391,7 @@
                    this.rootElement.winControl = null;
                    WinJS.Utilities.disposeSubTree(this.rootElement);
                    WinJS.Utilities.disposeSubTree(this.element);
-                   $(this.rootElement).remove();
+                   this.rootElement.parentElement.removeChild(this.rootElement);
                }
            }),
            WinJS.Utilities.eventMixin,

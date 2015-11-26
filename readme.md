@@ -3,6 +3,16 @@ It provides some utilities, helpers and controls to make your developers life ha
 
 Have a look at [API documentation](http://gleborgne.github.io/winjscontrib/api/) to see a glimpse of what is available.
 
+We also rolled a series of blog post explaining what you can do with WinJS Contrib.
+
+[WinJS Contrib Basics](http://mcnextpost.com/2015/04/21/winjs-contrib-basics/)
+
+[WinJS and ES6](http://mcnextpost.com/2015/04/23/winjs-and-es6/)
+
+[WinJS controls as webcomponents](http://mcnextpost.com/2015/04/26/using-winjs-controls-as-webcomponents/)
+
+[Registering your controls as webcomponents](http://mcnextpost.com/2015/04/27/registering-your-winjs-webcomponents/)
+
 ## What is WinJS ?
 It is a single page application (SPA) framework. The goal of WinJS is to provide the basis for HTML5 applications with almost native performances. It was originally designed by Microsoft for making Windows applications in HTML5 (for Windows, Windows Phone and Xbox One app stores).
 Now WinJS is open source. it can still be used for Windows apps, but also in cross platform hybrid apps. All details are available on [WinJS website](http://www.buildwinjs.com), and you can experiment with it in their [playground](http://try.buildwinjs.com).
@@ -62,4 +72,31 @@ We are still shaping libraries, samples and documentation. The github project is
 It's still under construction but a look at [API Documentation](http://gleborgne.github.io/winjscontrib/api/index.html) might help.
 
 ## Anything wrong ?
-We are happy to get feedback, I you find something unclear, or have questions, feel free to get in touch.
+We are happy to get feedback, If you find something unclear, or have questions, feel free to get in touch.
+
+
+## License 
+The MIT License (MIT)
+[OSI Approved License]
+
+The MIT License (MIT)
+
+Copyright (c) 2015 MCNEXT
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

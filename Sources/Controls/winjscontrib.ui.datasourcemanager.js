@@ -102,10 +102,15 @@ WinJSContrib.UI.DataSources = WinJSContrib.UI.DataSources || {};
                 return this._groupKind;
             },
             set: function (val) {
-                if (val && val != this._groupKind) {
+                if (val != this._groupKind) {
                     this._groupKind = val;
                     this.apply({ groupKind: val });
                     this.init();
+                }
+                if (!val) {
+                    this.compareGroups = null;
+                    this.getGroupData = null;
+                    this.getGroupKey = null;
                 }
             }
         },
@@ -190,16 +195,26 @@ WinJSContrib.UI.DataSources = WinJSContrib.UI.DataSources || {};
         },
 
         _filterItems: function (item) {
-            var res = true;
+            var ctrl = this;
+            var res = function (item) { return true; };
 
             if (this.filter)
-                res = res & this.filter(item);
+                res = function (item) { return ctrl.filter(item) };
+
             if (this.filters.length) {
+                var addFilter = function (f, newFilter) {
+                    return function (item) {
+                        var tmp = f(item);
+                        if (!tmp)
+                            return false;
+
+                        return newFilter(item);
+                    }
+                }
+
                 for (var i = 0 ; i < this.filters.length ; i++) {
                     var filter = this.filters.getAt(i);
-                    res = res & filter(item);
-                    if (!res)
-                        break;
+                    res = addFilter(res, filter);
                 }
             }
 
@@ -214,12 +229,14 @@ WinJSContrib.UI.DataSources = WinJSContrib.UI.DataSources || {};
          * initialise data
          */
         init: function (dontAttach) {
+            var ctrl = this;
             this.detach();
             if (this.items) {
                 this.list = new WinJS.Binding.List(this.items);
 
                 if (this.filter || this.filters.length) {
-                    this.filteredlist = this.list.createFiltered(this._filterItems.bind(this));
+                    var filterCallback = this._filterItems();
+                    this.filteredlist = this.list.createFiltered(filterCallback);
                 }
                 else {
                     this.filteredlist = this.list;
@@ -227,6 +244,16 @@ WinJSContrib.UI.DataSources = WinJSContrib.UI.DataSources || {};
 
                 if (this.getGroupKey && this.getGroupData && this.compareGroups) {
                     this.groupedList = this.filteredlist.createGrouped(this.getGroupKey.bind(this), this.getGroupData.bind(this), this.compareGroups.bind(this));
+
+                    var g = ctrl.groupedList.groups;
+                    for (var n in g._groupItems) {
+                        console.log(n);
+                        var grp = ctrl.groupedList._groupsProjection._groupItems[n];
+                        if (grp && grp.groupSize !== undefined)
+                            grp.data.groupCount = grp.groupSize;
+                    }
+                } else {
+                    this.groupedList = null;
                 }
 
                 if (!dontAttach)
@@ -261,7 +288,7 @@ WinJSContrib.UI.DataSources = WinJSContrib.UI.DataSources || {};
                         semzoom.locked = false;
                     }
                 }
-                else if (this.filteredlist && this.filteredlist.length >= this.defaultGroupLimit) {
+                else if (this.filteredlist && (this.filteredlist.length >= this.defaultGroupLimit || !this.groupedList)) {
                     this.listview.itemDataSource = this.filteredlist.dataSource;
                     this.listview.groupDataSource = null;
                     var semzoom = this.parentSemanticZoom();
@@ -269,8 +296,17 @@ WinJSContrib.UI.DataSources = WinJSContrib.UI.DataSources || {};
                         semzoom.locked = true;
                     }
                 }
+                //else if (this.filteredlist && this.filteredlist.length) {
+                //    this.listview.itemDataSource = this.filteredlist.dataSource;
+                //    this.listview.groupDataSource = null;
+                //    var semzoom = this.parentSemanticZoom();
+                //    if (semzoom) {
+                //        semzoom.locked = true;
+                //    }
+                //}
                 else {
-                    this.listview.itemDataSource = this.groupedList.dataSource;
+                    if (this.groupedList)
+                        this.listview.itemDataSource = this.groupedList.dataSource;
                     this.listview.groupDataSource = null;
                     if (this.zoomedOutListView)
                         this.zoomedOutListView.itemDataSource = null;
@@ -349,6 +385,9 @@ WinJSContrib.UI.DataSources = WinJSContrib.UI.DataSources || {};
         semanticZoom: {
             get: function () {
                 return this._semanticZoom;
+            },
+            set: function (val) {
+                this._semanticZoom = val;
             }
         },
 
@@ -360,6 +399,9 @@ WinJSContrib.UI.DataSources = WinJSContrib.UI.DataSources || {};
         listview: {
             get: function () {
                 return this._listview;
+            },
+            set: function (val) {
+                this._listview = val;
             }
         },
 
@@ -371,6 +413,9 @@ WinJSContrib.UI.DataSources = WinJSContrib.UI.DataSources || {};
         zoomedOutListview: {
             get: function () {
                 return this._zoomedOutListview;
+            },
+            set: function (val) {
+                this._zoomedOutListview = val;
             }
         },
 
@@ -424,6 +469,22 @@ WinJSContrib.UI.DataSources = WinJSContrib.UI.DataSources || {};
     }), WinJS.UI.DOMEventMixin, WinJS.Utilities.createEventProperties("myevent"));
 })(WinJSContrib.UI.DataSources, WinJSContrib.UI.DataSources.Grouping);
 
+if (WinJSContrib.UI.WebComponents) {
+    WinJSContrib.UI.WebComponents.register('mcn-semanticlistviews', WinJSContrib.UI.SemanticListViews, {
+        properties: [],
+        controls: {
+            "listview": WinJS.UI.ListView,
+            "zoomedOutListview": WinJS.UI.ListView,
+            "semanticZoom": WinJS.UI.SemanticZoom
+        },
+        map: {
+            "DEFAULTGROUPLIMIT": { attribute: 'defaultGroupLimit', property: '_dataManager.defaultGroupLimit', resolve: true },
+            "GROUPKIND": { attribute: 'groupKind', property: '_dataManager.groupKind', resolve: true },
+            "FIELD": { attribute: 'field', property: '_dataManager.field', resolve: true },
+            "ITEMS": { attribute: 'items', property: '_dataManager.items', resolve: true },
+        }
+    });
+}
 
 /** 
  * Custom grouping settings for {@link WinJSContrib.UI.DataSources.DataSourceManager}
@@ -460,7 +521,7 @@ WinJSContrib.UI.DataSources.Grouping = WinJSContrib.UI.DataSources.Grouping || {
                 return this.defaultGroupName;
 
             var val = WinJSContrib.Utils.readProperty(dataItem, this.field);
-            if (!val)
+            if (!val || !val[0])
                 return this.defaultGroupName;
 
             var key = val[0].toUpperCase();
@@ -471,7 +532,7 @@ WinJSContrib.UI.DataSources.Grouping = WinJSContrib.UI.DataSources.Grouping || {
             var val = '#';
             if (dataItem)
                 val = WinJSContrib.Utils.readProperty(dataItem, this.field);
-            if (!val)
+            if (!val || !val[0])
                 val = this.defaultGroupName;
 
             var key = val[0].toUpperCase();
@@ -501,14 +562,22 @@ WinJSContrib.UI.DataSources.Grouping = WinJSContrib.UI.DataSources.Grouping || {
 
         options.getGroupKey = options.getGroupKey || function (dataItem) {
             if (!dataItem)
-                return this.defaultGroupName;
+                return options.defaultGroupNam;
 
             var val = WinJSContrib.Utils.readProperty(dataItem, this.field);
             if (!val)
                 return this.defaultGroupName;
+            var key = val.toString();
+            if (typeof val !== 'string' && (val.length != null && val.length != undefined)) {
+                key = val.join(", ");
+            }
+            
+            if (key.trim().length == 0)
+                key = options.defaultGroupName;
 
-            var key = val.toString().toUpperCase();
-            return key;
+            key = key.toUpperCase();
+
+            return key || options.defaultGroupName;
         }
 
         options.getGroupData = options.getGroupData || function (dataItem) {
@@ -518,9 +587,16 @@ WinJSContrib.UI.DataSources.Grouping = WinJSContrib.UI.DataSources.Grouping || {
             if (!val)
                 val = this.defaultGroupName;
 
-            var key = val;
+            var key = val.toString();
+            if (typeof val !== 'string' && (val.length != null && val.length != undefined)) {
+                key = val.join(", ");
+            }
+            
+            if (key.trim().length == 0)
+                key = options.defaultGroupName;
+
             return {
-                title: key
+                title: key || options.defaultGroupName
             };
         }
 

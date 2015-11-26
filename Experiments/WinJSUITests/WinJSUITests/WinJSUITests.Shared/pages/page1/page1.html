@@ -1,0 +1,43 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>page1</title>
+
+    <link href="page1.css" rel="stylesheet" />
+    <script src="page1.js"></script>
+</head>
+<body>
+    <div class="page1 fragment">
+        <header class="page-header" aria-label="Header content" role="banner">
+            <button class="win-backbutton"></button>
+            <h1 class="titlearea win-type-ellipsis">
+                <span class="pagetitle">Welcome to page1</span>
+            </h1>
+        </header>
+        <section class="page-section" aria-label="Main content" role="main">
+            <form action="#" id="formtest" member>
+                <p>
+                    <label for="slgender">gender</label>
+                    <select id="slgender" name="slgender" required>
+                        <option value=""></option>
+                        <option value="male">male</option>
+                        <option value="female">male</option>
+                    </select>
+                </p>
+                <p>
+                    <label for="txtfirstname">first name</label>
+                    <input id="txtfirstname" name="txtfirstname" />
+                </p>
+                <p>
+                    <label for="txtlastname">last name</label>
+                    <input id="txtlastname" name="txtlastname" required />
+                </p>
+                <p>
+                    <button id="btnsubmit" tap="checkForm">submit</button>
+                </p>
+            </form>
+        </section>
+    </div>
+</body>
+</html>

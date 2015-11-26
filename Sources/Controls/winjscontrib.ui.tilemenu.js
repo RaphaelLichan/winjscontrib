@@ -74,7 +74,6 @@
                         ctrl.offsets.preferred = 'bottom';
                     }
                 }
-
             },
 
             show: function (elt, options) {
@@ -85,47 +84,48 @@
                 ctrl._renderMenu(options.items || ctrl.items);
                 ctrl.currentElements.overlay.style.opacity = '0';
                 ctrl.currentElements.root.style.opacity = '';
-                WinJSContrib.UI.Animation.fadeIn(ctrl.currentElements.overlay, { duration: 400 });
 
-                //setImmediate(function () {
-                    ctrl._layoutItems(options.placement || ctrl.placement, options.fillmode || ctrl.fillmode);
+                ctrl._layoutItems(options.placement || ctrl.placement, options.fillmode || ctrl.fillmode);
 
-                    
+                var itemsToShow = ctrl.currentElements.items.map(function (e) {
+                    return e.element;
+                });
 
-                    var itemsToShow = ctrl.currentElements.items.map(function (e) {
-                        return e.element;
-                    });
-
-                    WinJSContrib.UI.Animation.enterGrow(itemsToShow, { duration: 300, itemdelay: 15, maxdelay: 150, exagerated:true, easing: WinJSContrib.UI.Animation.Easings.easeOutBack });
-                //});
+                var p = [
+                    WinJSContrib.UI.Animation.fadeIn(ctrl.currentElements.overlay, { duration: 400 }),
+                    WinJSContrib.UI.Animation.enterGrow(itemsToShow, { duration: 300, itemdelay: 15, maxdelay: 150, exagerated:true, easing: WinJSContrib.UI.Animation.Easings.easeOutBack })
+                ];
+                
+                return WinJS.Promise.join(p);
             },
 
             hide: function (clickedElement) {
                 var ctrl = this;
                 var elements = ctrl.currentElements;
-                if (elements) {
-                    ctrl.currentElements = null;
-                    $('.tap', elements.root).untap();
+                if (!elements) return WinJS.Promise.wrap(null);
+                
+                ctrl.currentElements = null;
+                WinJSContrib.UI.untapAll(elements.root);
 
-                    var itemsToHide = elements.items.map(function (e) {
-                        return e.element;
-                    });
+                var itemsToHide = elements.items.map(function (e) {
+                    return e.element;
+                });
 
-                    if (clickedElement) {
-                        var itemsToHide = itemsToHide.filter(function (e) {
-                            return e != clickedElement;
-                        });
-                    }
-
-                    var p = [];
-                    p.push(WinJSContrib.UI.Animation.fadeOut(elements.overlay, { duratin: 160, delay: 100 }));
-                    p.push(WinJSContrib.UI.Animation.exitShrink(clickedElement, { duration: 260, exagerated: true, delay: 140, easing: WinJSContrib.UI.Animation.Easings.easeInBack }));
-                    p.push(WinJSContrib.UI.Animation.exitShrink(itemsToHide, { duration: 160, exagerated: true, itemdelay: 20, maxdelay: 100, easing: WinJSContrib.UI.Animation.Easings.easeInBack }));
-                    
-                    WinJS.Promise.join(p).then(function () {
-                        $(elements.root).remove();
+                if (clickedElement) {
+                    itemsToHide = itemsToHide.filter(function (e) {
+                        return e != clickedElement;
                     });
                 }
+
+                var p = [
+                    WinJSContrib.UI.Animation.fadeOut(elements.overlay, { duration: 160, delay: 100 }),
+                    WinJSContrib.UI.Animation.exitShrink(clickedElement, { duration: 260, exagerated: true, delay: 140, easing: WinJSContrib.UI.Animation.Easings.easeInBack }),
+                    WinJSContrib.UI.Animation.exitShrink(itemsToHide, { duration: 160, exagerated: true, itemdelay: 20, maxdelay: 100, easing: WinJSContrib.UI.Animation.Easings.easeInBack })
+                ];
+                
+                return WinJS.Promise.join(p).then(function () {
+                    elements.root.parentElement.removeChild(elements.root);
+                });
             },
 
             _renderMenuItem: function (container, item, index) {
@@ -140,7 +140,7 @@
                     res.element = rendered.children[0];
                     res.element.classList.add('mcn-tilemenu-menu');
                     res.element.style.opacity = '0';
-                    $(res.element).tap(function (elt) {
+                    WinJSContrib.UI.tap(res.element, function (elt) {
                         ctrl.dispatchEvent('iteminvoked', { item: item, target: elt });
                         ctrl.hide(elt);
                     });
@@ -165,7 +165,7 @@
                 current.overlay.className = 'mcn-tilemenu-overlay';
                 current.root.appendChild(current.overlay);
                 ctrl._renderOverlay();
-                $(current.overlay).tap(function (elt) {
+                WinJSContrib.UI.tap(current.overlay, function (elt) {
                     ctrl.hide();
                 }, { disableAnimation: true });
 
@@ -173,7 +173,7 @@
                 current.itemsContainer.className = 'mcn-tilemenu-items';
                 current.root.appendChild(current.itemsContainer);
 
-                $(current.itemsContainer).tap(function (elt) {
+                WinJSContrib.UI.tap(current.itemsContainer, function (elt) {
                     ctrl.hide();
                 }, {disableAnimation: true});
 

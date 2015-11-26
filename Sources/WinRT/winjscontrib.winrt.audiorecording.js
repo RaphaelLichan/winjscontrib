@@ -1,4 +1,5 @@
 ﻿/// <reference path="winjscontrib.core.js" />
+
 var WinJSContrib = WinJSContrib || {};
 WinJSContrib.WinRT = WinJSContrib.WinRT || {};
 WinJSContrib.WinRT.Audio = WinJSContrib.WinRT.Audio || {};
@@ -18,7 +19,6 @@ WinJSContrib.WinRT.Audio = WinJSContrib.WinRT.Audio || {};
 
             recorder.state.ellapsedTime = 0;
             recorder.state.startedAt = new Date();
-            recorder.state.isRecording = true;
 
             options = options || {};
             recorder.recording = {
@@ -41,11 +41,12 @@ WinJSContrib.WinRT.Audio = WinJSContrib.WinRT.Audio || {};
             recorder.recording.eventTracker.addEvent(recorder.recording.mediaCaptureMgr, "recordlimitationexceeded", recorder._errorHandler.bind(recorder));
 
             return recorder.recording.mediaCaptureMgr.initializeAsync(recorder.recording.captureInitSettings).then(function (result) {
+                recorder.state.isRecording = true;
                 recorder.ellapsedTimeInterval = setInterval(function () {
                     var dif = (new Date() - recorder.state.startedAt) / 1000;
                     recorder.state.ellapsedTime = dif;
                 }, 1000);
-                
+
                 return recorder.recording.mediaCaptureMgr.startRecordToStorageFileAsync(recorder.recording.encodingProfile, file).then(function () {
                     //clearInterval(recorder.ellapsedTimeInterval);
                     //recorder.state.isRecording = false;
@@ -54,7 +55,7 @@ WinJSContrib.WinRT.Audio = WinJSContrib.WinRT.Audio || {};
                 }, function (err) {
                     recorder._errorHandler(err);
                 });
-                
+
             }, recorder._errorHandler.bind(recorder));
         },
 
@@ -78,7 +79,11 @@ WinJSContrib.WinRT.Audio = WinJSContrib.WinRT.Audio || {};
                 ctrl._oldRecording = recording;
                 ctrl.recording = null;
 
-                return recording.mediaCaptureMgr.stopRecordAsync().then(function (result) {                    
+                return recording.mediaCaptureMgr.stopRecordAsync().then(function (result) {
+                    recording.dispose();
+                    ctrl.dispatchEvent('recordingstopped');
+                    return recording.file;
+                }, function () {
                     recording.dispose();
                     ctrl.dispatchEvent('recordingstopped');
                     return recording.file;

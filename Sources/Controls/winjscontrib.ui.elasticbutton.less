@@ -1,0 +1,29 @@
+.mcn-elasticbutton {
+    position: relative;
+    border : none;
+
+	.mcn-elasticbutton-bg{
+        position: absolute;
+        left:0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+
+        svg{
+            stroke: white;
+            stroke-width: 3px;
+            fill: transparent;
+        }
+	}
+
+    .mcn-elasticbutton-content{
+        position: relative;
+        transition: transform 80ms ease-out;
+	}
+
+    &.pressed {
+        .mcn-elasticbutton-content{
+            transform: scale(0.9);
+        }
+    }
+}

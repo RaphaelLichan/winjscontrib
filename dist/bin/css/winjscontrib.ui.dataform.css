@@ -1,5 +1,5 @@
-/* 
- * WinJS Contrib v2.0.1.0
+﻿/* 
+ * WinJS Contrib v2.1.0.4
  * licensed under MIT license (see http://opensource.org/licenses/MIT)
  * sources available at https://github.com/gleborgne/winjscontrib
  */
@@ -86,6 +86,7 @@
 .mcn-dataform.form-vertical p > input,
 .mcn-dataform.form-vertical p > select,
 .mcn-dataform.form-vertical p > textarea {
+  display: block;
   width: 100%;
 }
 .mcn-dataform.form-horizontal.label60 label {

@@ -109,7 +109,7 @@
                         dataform.state.item = val;
                     }
 
-                    dataform.state.updated = false;
+                    
                     dataform.validator.resetForm();
 
                     dataform.autobindFields();
@@ -120,6 +120,7 @@
                         dataform.allowTooltip = tooltips;
                         dataform.checkState();
                         dataform.initValidator();
+                        dataform.state.updated = false;
                     });
                     dataform.dispatchEvent("itemchanged", { dataform: this, item: val });
                 }
@@ -259,6 +260,14 @@
          */
         {
             /**
+             * @namespace WinJSContrib.UI.DataForm.defaultBindingOptions
+             */
+            DefaultBindingOptions: {
+                trimText: true,
+                convertEmptyToNull: true,
+            },
+
+            /**
              * @namespace WinJSContrib.UI.DataForm.Converters
              */
             Converters: {
@@ -266,10 +275,10 @@
                  * @member
                  */
                 "none": {
-                    fromObject: function (val) {
+                    fromObject: function (val, options) {
                         return val.toString();
                     },
-                    fromInput: function (val) {
+                    fromInput: function (val, options) {
                         return val;
                     }
                 },
@@ -277,29 +286,39 @@
                  * @member
                  */
                 "text": {
-                    fromObject: function (val) {
+                    fromObject: function (val, options) {
                         if (typeof val === "undefined" || val === null)
                             return '';
 
-                        return val.toString();
+                        var res = val.toString();
+                        
+                        return res;
                     },
-                    fromInput: function (val) {
-                        return val;
+                    fromInput: function (val, options) {
+                        var res = val;
+                        if (res && options && options.trimText) {
+                            res = res.trim();
+                        }
+                        if (options && options.convertEmptyToNull) {
+                            res = (res === '') ? null : res;
+                        }
+                        return res;
                     }
                 },
                 /**
                  * @member
                  */
                 "number": {
-                    fromObject: function (val) {
+                    fromObject: function (val, options) {
                         if (typeof val !== "number")
                             return '';
 
                         return val.toString();
                     },
-                    fromInput: function (val) {
+                    fromInput: function (val, options) {
                         if (typeof val !== "undefined" && val !== null)
-                            return parseFloat(val);
+                          //return parseFloat(val);
+                          return parseFloat(val.toString().replace(',', '.').replace(' ', ''));
 
                         return null;
                     }
@@ -308,13 +327,13 @@
                  * @member
                  */
                 "boolean": {
-                    fromObject: function (val) {
+                    fromObject: function (val, options) {
                         if (typeof val === "undefined" || val === null)
                             return '';
 
                         return val.toString();
                     },
-                    fromInput: function (val) {
+                    fromInput: function (val, options) {
                         if (val === 'true')
                             return true;
                         if (val === 'false')
@@ -327,10 +346,10 @@
                  * @member
                  */
                 "object": {
-                    fromObject: function (val) {
+                    fromObject: function (val, options) {
                         return val;
                     },
-                    fromInput: function (val) {
+                    fromInput: function (val, options) {
                         return val;
                     }
                 },
@@ -338,10 +357,10 @@
                  * @member
                  */
                 "stringifiedObject": {
-                    fromObject: function (val) {
+                    fromObject: function (val, options) {
                         return JSON.stringify(val);
                     },
-                    fromInput: function (val) {
+                    fromInput: function (val, options) {
                         return JSON.parse(val);
                     }
                 }
@@ -361,6 +380,8 @@
             }
         },
 
+        
+
         /**
          * bi-directional binding for working with input fields and custom input controls. This binding expect a {@link WinJSContrib.UI.DataForm} to be found on the parent form
          * @function WinJSContrib.UI.DataFormBinding
@@ -370,7 +391,21 @@
          * @param {string[]} destProperty path to DOM element property targeted by binding
          */
         DataFormBinding: WinJS.Binding.initializer(function (source, sourceProperty, dest, destProperty) {
+            if (dest.binded && dest.winControl)
+                dest.winControl.dispose();
+
             var dataform = WinJSContrib.UI.parentDataForm(dest);
+            var options = WinJSContrib.UI.DataForm.DefaultBindingOptions;
+            var optionsText = dest.getAttribute("data-formfield-options");
+            if (optionsText) {
+                options = WinJS.UI.optionsParser(optionsText, window);
+            }
+            var inputType = "";
+            var inputOption = dest.getAttribute("data-forminput");
+            if (inputOption) {
+                inputType = inputOption;
+            }
+
             var fieldUpdated = false;
             dest.classList.add('mcn-dataform-field');
 
@@ -393,43 +428,52 @@
                 if (typeof data === "undefined")
                     data = null;
 
-                data = converter.fromObject(data);
+                data = converter.fromObject(data, options);
 
                 WinJSContrib.Utils.writeProperty(dest, destProperty, data);
             }
 
             function updateObjectFromInput() {
                 dataform.checkState();
-                dataform.updated = true;
-                fieldUpdated = true;
-
                 if (!dest.id || dataform.validator.element(dest)) {
                     var val = WinJSContrib.Utils.getProperty(dest, destProperty).propValue;
                     if (val !== undefined)
-                        val = converter.fromInput(val);
+                        val = converter.fromInput(val, options);
 
                     WinJSContrib.Utils.writeProperty(source, sourceProperty, val);
                 }
+                dataform.updated = true;
             }
 
             function validateObjectOnBlur() {
                 if (fieldUpdated)
                     dataform.validator.element(dest);
             }
+            if (!dest.binded)
+                dest.binded = true;
 
-            dest.addEventListener("change", updateObjectFromInput);
-            if (dest.id) {
-                dest.addEventListener("blur", validateObjectOnBlur);
-            }
 
             if (!dest.winControl) {
                 dest.classList.add('win-disposable');
                 dest.winControl = {
                     dispose: function () {
-                        dest.removeEventListener("change", updateObjectFromInput);
-                        dest.removeEventListener("blur", validateObjectOnBlur);
+                        dest.removeEventListener("change", dest.winControl.updateObjectFromInput);
+                        dest.removeEventListener("blur", dest.winControl.validateObjectOnBlur);
+                        if (inputType) {
+                            dest.removeEventListener(inputType, dest.winControl.updateObjectFromInput);
+                        }
                     }
                 }
+            }
+            dest.winControl.updateObjectFromInput = updateObjectFromInput;
+            dest.winControl.validateObjectOnBlur = validateObjectOnBlur;
+
+            if (inputType) {
+                dest.addEventListener(inputType, dest.winControl.updateObjectFromInput);
+            }
+            dest.addEventListener("change", dest.winControl.updateObjectFromInput);
+            if (dest.id) {
+                dest.addEventListener("blur", validateObjectOnBlur);
             }
 
             var bindingDesc = {
