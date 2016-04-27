@@ -22,7 +22,7 @@ var bom = require('gulp-bom');
 //var config = require('./build.config.json');
 
 
-var WinJSContribVersion = "2.1.0.4";
+var WinJSContribVersion = "2.1.0.6";
 
 var typingsPath = 'Sources/typings/';
 var srcCorePath = 'Sources/Core/';
@@ -165,10 +165,11 @@ var tsSearchProject = ts.createProject({
     noEmitOnError : false
 });
 
-gulp.task('searchcompile', ["datacontainercompile"], function() {
+gulp.task('searchcompile', ["corecompile", "typescript", "datacontainercompile"], function() {
 	var tsResult = gulp.src([
 		typingsPath + '*.d.ts', 
 		tsDestPath + 'winjscontrib.core.d.ts',
+		tsDestPath + 'winjscontrib.messenger.d.ts',
 		srcDataContainerPath + '*.d.ts', 	
 		srcSearchPath + 'winjscontrib.search.ts', 
 		srcSearchPath + 'winjscontrib.search.index.ts', 
@@ -231,9 +232,10 @@ var tsGlobalProject = ts.createProject({
     noEmitOnError : false
 });
 
-gulp.task('typescript', ['searchcompile'], function() {
+gulp.task('typescript', ["corecompile"], function() {
 	var tsResult = gulp.src([
 		typingsPath + '*.d.ts', 
+		typingsPath + 'react/*.d.ts', 
 		tsDestPath + 'winjscontrib.core.d.ts',
 		srcCorePath + 'winjscontrib.ui.pages.ts', 
 		srcCommonPath + '*.ts', 
@@ -270,7 +272,7 @@ gulp.task('jshint', ['cleanscripts', 'typescript'], function() {
 	.pipe(jshint.reporter('default'));
 });
 
-gulp.task('scripts', ['cleanscripts', 'typescript'], function() {
+gulp.task('scripts', ['cleanscripts', 'typescript', 'searchcompile'], function() {
 	gulp.src([srcCommonPath + 'winjscontrib.dynamicscripts.html']).pipe(bom()).pipe(gulp.dest(jsDestPath));
 	var header = licenseHeader();
 	
@@ -335,7 +337,7 @@ gulp.task('scripts', ['cleanscripts', 'typescript'], function() {
 //  	.pipe(gulp.dest('dist/testsjsdoc'));
 //});
 
-gulp.task('doc', ['cleandoc', 'scripts'], function() {
+gulp.task('doc', ['cleandoc'], function() {
 	//ink-docstrap module within gulp-jsdoc is not up to date, update it with latest version
 	
 	var infos = {
@@ -357,7 +359,8 @@ gulp.task('doc', ['cleandoc', 'scripts'], function() {
 	    inverseNav      : false
 	  };
 
-	return gulp.src([jsDestPath +'**/*.js', 'readme.md'])        
+
+	return gulp.src([jsDestPath +'**/*.js', '!' + jsDestPath +'**/*.min.js','readme.md'])        
 	.pipe(plumber({errorHandler: onError}))
 	.pipe(jsdoc.parser(infos))
   	.pipe(jsdoc.generator('dist/documentation/', template));
@@ -378,7 +381,7 @@ gulp.task('watch', function() {
 	], ['typescript']);
 });
 
-gulp.task('buildAndDoc', ['styles', 'doc']);
+gulp.task('buildAndDoc', ['build', 'doc']);
 gulp.task('build', ['styles', 'scripts']);
 
-gulp.task('default', ['buildAndDoc']);
+gulp.task('default', ['build']);

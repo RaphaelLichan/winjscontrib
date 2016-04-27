@@ -1,5 +1,5 @@
 ﻿/* 
- * WinJS Contrib v2.1.0.4
+ * WinJS Contrib v2.1.0.6
  * licensed under MIT license (see http://opensource.org/licenses/MIT)
  * sources available at https://github.com/gleborgne/winjscontrib
  */
@@ -38,13 +38,9 @@ WinJSContrib.BgDownloads = WinJSContrib.BgDownloads || {};
         this.retryOnError = options.retryOnError;
         this.handleItemProperties = options.handleItemProperties;
         this.maxConcurrentDownloads = options.maxConcurrentDownloads || 300;
-        this.debouncedCheck = _.debounce(function () {
-            tracker.checkDownloads();
-        }, 200, false);
-
-        this.debouncedVerif = _.debounce(function () {
-            tracker.verifyItems();
-        }, 200, false);
+        this.maxItemsInQueue = options.maxItemsInQueue || null;
+        this.debounceDelay = options.debounceDelay || 200;        
+        this.maxDownloadAttempts = options.maxDownloadAttempts || 5;
 
         this.debouncedSave = _.throttle(function () {
             tracker.saveItems();
@@ -62,6 +58,22 @@ WinJSContrib.BgDownloads = WinJSContrib.BgDownloads || {};
         this.refreshInterval = null;
         tracker.ready = false;
     }, {
+        debounceDelay : {
+            get: function () {
+                return this._debounceDelay;
+            },
+            set: function (val) {
+                var tracker = this;
+                tracker._debounceDelay = val;
+                this.debouncedCheck = _.debounce(function () {
+                    tracker.checkDownloads();
+                }, this.debounceDelay, false);
+
+                this.debouncedVerif = _.debounce(function () {
+                    tracker.verifyItems();
+                }, this.debounceDelay, false);
+            }
+        },
         _getFolder: function (allowCreate) {
             if (this.folder)
                 return WinJS.Promise.wrap(this.folder);
@@ -264,10 +276,16 @@ WinJSContrib.BgDownloads = WinJSContrib.BgDownloads || {};
                         item.status = downloadStatus.downloaded;
                         logger.warn("remote item not found, skipping item " + item.itemid);
                         p = tracker._checkItem(item, true);
+                    } else if (err.message && err.message.indexOf("(500)") > 0) {
+                        item.status = downloadStatus.downloaded;
+                        logger.warn("server error, skipping item " + item.itemid);
+                        p = tracker._checkItem(item, true);
                     }
                 }
 
                 p.then(function () {
+                    return WinJS.Promise.timeout(5);
+                }).then(function () {
                     return tracker.removeFile(item);
                 }).then(function () {
                     item.filepath = null;
@@ -341,6 +359,12 @@ WinJSContrib.BgDownloads = WinJSContrib.BgDownloads || {};
                     }
                 }
 
+                if (observable.download && observable.download.ended && observable.download.error) {
+                    var e = observable.download.error;
+                    observable.status = downloadStatus.error;
+                    return WinJS.Promise.wrap();
+                }
+
                 if ((observable.status === downloadStatus.downloading && observable.downloadid) || observable.status === downloadStatus.waiting) {
                     return WinJS.Promise.wrap();
                 }
@@ -353,7 +377,7 @@ WinJSContrib.BgDownloads = WinJSContrib.BgDownloads || {};
                 //    return Windows.Storage.StorageFile.getFileFromPathAsync(observable.filepath).then(function (file) {
                 //        if (file) {
                 //            observable.status = downloadStatus.downloaded;
-                //            var targetfilename = observable.filepath.substr(0, observable.filepath.length - ".download".length);
+                //            var targetfilename = observable.filepath.substr(0, observable.filepath.length - tracker.tempExtension.length);
                 //            return closeItem();
                 //        } else {
                 //            observable.status = downloadStatus.waiting;
@@ -381,8 +405,7 @@ WinJSContrib.BgDownloads = WinJSContrib.BgDownloads || {};
         },
 
         _swapTempFile: function (observable) {
-            var ext = ".download";
-            if (observable.filepath.indexOf(ext) > 0) {
+            if (observable.filepath && observable.filepath.indexOf(this.tempExtension) > 0) {
                 return Windows.Storage.StorageFile.getFileFromPathAsync(observable.filepath).then(function (file) {
                     if (file) {
                         //var targetfilename = observable.filepath.substr(0, observable.filepath.length - ".download".length);
@@ -418,17 +441,23 @@ WinJSContrib.BgDownloads = WinJSContrib.BgDownloads || {};
             return item;
         },
 
-        add: function (item, itemid, folderpath, filename, uri) {
+        add: function (item, itemid, folderpath, filename, uri, immediate) {
             var tracker = this;
+
+            if (tracker.maxItemsInQueue && tracker.items.length > tracker.maxItemsInQueue) {
+                return WinJS.Promise.wrapError({ message: "max downloads in queue exceeded " + tracker.items.length })
+            }
 
             var existing = tracker.items.filter(function (i) {
                 return i.itemid == itemid;
             });
 
-            if (existing && existing.length)
-                return;
+            
 
-            var observable = new ObservableItem()
+            if (existing && existing.length)
+                return WinJS.Promise.wrap(existing[0]);
+
+            var observable = new ObservableItem();
             observable.itemid = itemid;
             observable.data = item;
             observable.folderpath = folderpath;
@@ -438,10 +467,18 @@ WinJSContrib.BgDownloads = WinJSContrib.BgDownloads || {};
 
             tracker.items.push(observable);
 
-            tracker.debouncedCheck();
             tracker.debouncedSave();
 
-            return WinJS.Promise.wrap();
+            if (immediate) {
+                return this.startDownloads([observable]).then(function(downloads) {
+                    if (downloads && downloads.length)
+                        return downloads[0];
+                });
+            }
+
+            tracker.debouncedCheck();
+            
+            return WinJS.Promise.wrap(observable);
         },
 
         startDownloads: function (items) {
@@ -465,27 +502,38 @@ WinJSContrib.BgDownloads = WinJSContrib.BgDownloads || {};
                     }
 
                     var downloadPromise = folderPromise.then(function (folder) {
+                        observable.attemps = observable.attemps || 0;
+                        observable.attemps = observable.attemps + 1;
+
+                        if (observable.attemps > tracker.maxDownloadAttempts) {
+                            tracker.remove(observable);
+                            logger.warn("too much bg download attemps on item " + observable.filename);
+                            return WinJS.Promise.wrap(null);
+                        }
+
                         if (WinJSContrib.BgDownloads.currentDownloads.length > tracker.maxConcurrentDownloads) {
                             observable.status = downloadStatus.waiting;
                             logger.debug("too much pendings dl " + WinJSContrib.BgDownloads.currentDownloads.length + " / " + tracker.maxConcurrentDownloads + " " + tracker.items.length);
-                            return WinJS.Promise.wrap();
+                            return WinJS.Promise.wrap(null);
                         }
 
                         var dl = new WinJSContrib.BgDownloads.Download();
                         var filename = encodeURIComponent(observable.filename);
-                        var uri = new Windows.Foundation.Uri(observable.uri)
-                        var startDownload = dl.start(uri, filename + ".download", folder, Windows.Storage.CreationCollisionOption.replaceExisting).then(function (download) {
+                        var uri = new Windows.Foundation.Uri(observable.uri);
+                        var startDownload = WinJS.Promise.timeout(10000, dl.start(uri, filename + tracker.tempExtension, folder, Windows.Storage.CreationCollisionOption.replaceExisting)).then(function (download) {
                             logger.debug("bgdownload start " + WinJSContrib.BgDownloads.currentDownloads.length + " / " + tracker.maxConcurrentDownloads + " " + tracker.items.length);
                             observable.status = downloadStatus.downloading;
                             observable.download = download;
                             observable.downloadid = download.download.guid;
                             observable.filepath = download.file;
                             tracker.attach(observable, download);
+                            return observable;
                         }).then(null, function (err) {
                             logger.error("download start error " + err);
                             observable.status = downloadStatus.error;
                             observable.download = null;
                             observable.downloadid = null;
+                            return observable;
                         });
 
                         return startDownload;
@@ -565,21 +613,28 @@ WinJSContrib.BgDownloads = WinJSContrib.BgDownloads || {};
 
         removeFile: function (item) {
             var tracker = this;
-            console.log('remove item file for ' + item.itemid);
-            var idx = tracker.items.indexOf(item);
-            if (idx >= 0) {
-                console.log('remove item file for ' + item.itemid + ' ' + item.filepath);
-                return Windows.Storage.StorageFile.getFileFromPathAsync(item.filepath).then(function (file) {
-                    if (file) {
-                        return file.deleteAsync();
-                    }
-                }, function (err) {
-                    console.info('file not found ' + item.filepath, err);
-                    return WinJS.Promise.wrap();
-                });
-            }
 
-            return WinJS.Promise.wrap();
+            return new WinJS.Promise(function (complete, error) {
+                logger.verbose('remove item file for ' + item.itemid);
+                var idx = tracker.items.indexOf(item);
+                if (idx >= 0) {
+                    logger.verbose('remove item file for ' + item.itemid + ' ' + item.filepath);
+                    Windows.Storage.StorageFile.getFileFromPathAsync(item.filepath).then(function (file) {
+                        if (file) {
+                            file.deleteAsync().then(complete, error);
+                        } else {
+                            complete();
+                        }
+                    }, function (err) {
+                        logger.debug('file not found for deletion ' + item.filepath, err);
+                        complete();
+                    });
+                }
+                else {
+                    complete();
+                }
+
+            });
         },
 
         remove: function (item) {
@@ -587,20 +642,20 @@ WinJSContrib.BgDownloads = WinJSContrib.BgDownloads || {};
 
             var idx = tracker.items.indexOf(item);
             if (idx >= 0) {
-                console.log('remove item from list ' + item.itemid);
+                logger.verbose('remove item from list ' + item.itemid);
                 tracker.items.splice(idx, 1);
                 return Windows.Storage.StorageFile.getFileFromPathAsync(item.filepath).then(function (file) {
-                    var tempext = ".download";
-                    if (file.path.indexOf(tempext) == (file.path.length - tempext.length))
+                    var tempext = tracker.tempExtension;
+                    if (file.path && file.path.indexOf(tempext) == (file.path.length - tempext.length))
                         return file.deleteAsync();
                 }, function (err) {
-                    console.info('file not found', err);
+                    logger.debug('file not found', err);
                     return WinJS.Promise.wrap();
                 }).then(function () {
                     tracker.debouncedSave();
                 });
             } else {
-                console.warn('item ' + item.itemid + ' not found');
+                logger.warn('item ' + item.itemid + ' not found');
             }
 
             return WinJS.Promise.wrap();

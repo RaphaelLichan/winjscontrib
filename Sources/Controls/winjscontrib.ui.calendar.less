@@ -1,0 +1,219 @@
+.mcn-datepicker{
+    display : inline;
+
+    .mcn-datepicker-text{
+        display : inline;
+
+        &:before {
+            content : "\e8bf";
+            font-family : "Segoe MDL2 Assets";
+            margin-right : 8px;
+        }
+    }
+}
+
+.mcn-datepicker-flyout {
+    padding: 0;
+    border: none;
+}
+
+.mcn-calendar.win-disposable {
+    @gridsize: 38px;
+    @space: 10px;
+
+    width: 7*@gridsize + 2*@space;
+    height: 8*@gridsize + 2*@space;
+    position: relative;
+    background-color: #333;
+    color: white;
+    overflow: hidden;
+    .mcn-calendar-wrapper {
+        button {
+            width: @gridsize;
+            height: @gridsize;
+            line-height: @gridsize;
+            text-align: center;
+            border: 2px solid transparent;
+            background-color: transparent;
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+            outline : none;
+
+            &:hover, &.tapped {
+                background-color: #555;
+            }
+
+            &:disabled {
+                opacity: 0.2;
+                pointer-events: none;
+                touch-action : none;
+            }
+        }
+    }
+
+    .day-item, .day-header {
+        width: @gridsize;
+        height: @gridsize;
+        line-height: @gridsize - 6;
+        text-align: center;
+        display: block;
+        border: 2px solid transparent;
+        box-sizing: border-box;
+
+        &.notthismonth {
+            color: #777;
+            font-weight: 400;
+        }
+    }
+
+    .day-item.day-header {
+        font-size: 11pt;
+        color: #AAA;
+    }
+
+    .day-item, .month-item {
+        touch-action : manipulation;
+        font-size : 13pt;
+        font-weight : normal;
+
+        &.today{
+            border-color: #444;
+        }
+
+        &.selected {
+            border-color: gold;
+        }
+    }
+
+    .navbuttons {
+        position: absolute;
+        right: @space;
+        top: @space;
+
+        .navbutton-previous:before {
+            content: '\E014';
+            font-family: 'Segoe MDL2 Assets';
+        }
+
+        .navbutton-next:before {
+            content: '\E015';
+            font-family: 'Segoe MDL2 Assets';
+        }
+    }
+
+    .mcn-calendar-panels, .mcn-calendar-wrapper {
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+
+    .month-itemspanel {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-flow: row wrap;
+
+        .month-item {
+            width: 7*@gridsize/4;
+            height: 7*@gridsize/4;
+        }
+    }
+
+    .calendar-panel {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        padding: @space;
+        box-sizing: border-box;
+        display: flex;
+        flex-flow: column nowrap;
+
+        &.disabled{
+            visibility : hidden;
+        }
+
+        > header {
+            height: @gridsize;
+            margin-right: 2*@gridsize+@space;
+            display: flex;
+            align-items: center;
+            padding-left: @space;
+
+            > * {
+                margin-right: 10px;
+            }
+        }
+
+        > section {
+            flex: 1;            
+            position: relative;
+            overflow : hidden;
+            touch-action : none;
+        }
+
+        .calendar-panel-content {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            flex: 1;
+
+            .calendar-panel-item {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-flow: column nowrap;
+
+
+                > header {
+                    height: @gridsize;
+                    margin-right: 2*@gridsize+@space;
+                    display: flex;
+                    align-items: center;
+                    padding-left: @space;
+
+                    > * {
+                        margin-right: 10px;
+                    }
+                }
+
+                > section {
+                    flex: 1;
+                    display: flex;
+                    flex-flow: column nowrap;
+                    position: relative;
+
+                    > header {
+                        display: flex;
+                        flex-flow: row wrap;
+                    }
+
+                    > section {
+                        flex: 1;
+                        overflow: hidden;
+                        position: relative;
+
+                        .day-items-wrapper {
+                            position: absolute;
+                            left: 0;
+                            top: 0;
+                            width: 100%;
+                            height: 100%;
+                            display: flex;
+                            flex-flow: row wrap;
+                            touch-action : none;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

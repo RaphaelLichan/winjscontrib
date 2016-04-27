@@ -1,5 +1,5 @@
 ﻿/* 
- * WinJS Contrib v2.1.0.4
+ * WinJS Contrib v2.1.0.6
  * licensed under MIT license (see http://opensource.org/licenses/MIT)
  * sources available at https://github.com/gleborgne/winjscontrib
  */
@@ -453,6 +453,23 @@ var WinJSContrib;
             }
         });
 
+        WinJSContrib.Bindings.phone = WinJS.Binding.initializer(function emptyIfNull(source, sourceProperty, dest, destProperty) {
+            var data = WinJSContrib.Utils.readProperty(source, sourceProperty);
+            if (data){
+                dest.innerHTML = '<a class="phonenumber" href="tel://' + data + '">' + data + '</a>'
+            }else{
+                dest.innerHTML = '';
+            }
+        });
+
+        WinJSContrib.Bindings.mail = WinJS.Binding.initializer(function emptyIfNull(source, sourceProperty, dest, destProperty) {
+            var data = WinJSContrib.Utils.readProperty(source, sourceProperty);
+            if (data){
+                dest.innerHTML = '<a class="email" href="mailto://'+ data +'">' + data + '</a>'
+            }else{
+                dest.innerHTML = '';
+            }
+        });
 
         /**
          * Two way binding triggered by "change" event on inputs
@@ -504,11 +521,12 @@ var WinJSContrib;
                 var scope = WinJSContrib.Utils.getScopeControl(dest);
                 if (scope) {
                     var tapCallback = WinJSContrib.Utils.readProperty(scope, destProperty);
+                    var lockpointer = dest.hasAttribute("lockpointer");
                     if (tapCallback && typeof tapCallback == "function") {
                         WinJSContrib.UI.tap(dest, function (arg) {
-                            var item = WinJSContrib.Utils.readProperty(source, sourceProperty);
-                            tapCallback.call(scope, arg, item);                            
-                        }, { lock: true });
+                            var item = WinJSContrib.Utils.readProperty(source, sourceProperty);                            
+                            tapCallback.call(scope, { target : arg, detail: { element: arg, item: item } });
+                        }, { lock: lockpointer });
                     }
                 }
             });

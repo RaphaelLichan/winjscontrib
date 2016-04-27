@@ -1,6 +1,6 @@
 ﻿module WinJSContrib.Logs.Appenders {
     /**
-     * @namespace
+     * @namespace WinJSContrib.Logs.Appenders
      */
     WinJSContrib.Logs.Appenders = WinJSContrib.Logs.Appenders;
 
@@ -39,24 +39,26 @@
          * @param {WinJSContrib.Logs.Levels} log level
          */
         public log(logger: Logs.Logger, message: string, level: Logs.Levels, ...args) {
-            var msg = [this.format(logger, message, level)];
-            if (args.length) {
-                args.forEach((a) => {
-                    msg.push(a);
-                });
-            }
+            if (this.config.level == Logs.Levels.inherit || level >= this.config.level) {
+                var msg = [this.format(logger, message, level)];
+                if (args.length) {
+                    args.forEach((a) => {
+                        msg.push(a);
+                    });
+                }
 
-            switch (level) {
-                case Levels.verbose:
-                    return console.log.apply(console, msg);
-                case Levels.debug:
-                    return console.log.apply(console, msg);
-                case Levels.info:
-                    return console.info.apply(console, msg);
-                case Levels.warn:
-                    return console.warn.apply(console, msg);
-                case Levels.error:
-                    return console.error.apply(console, msg);
+                switch (level) {
+                    case Levels.verbose:
+                        return console.log.apply(console, msg);
+                    case Levels.debug:
+                        return console.log.apply(console, msg);
+                    case Levels.info:
+                        return console.info.apply(console, msg);
+                    case Levels.warn:
+                        return console.warn.apply(console, msg);
+                    case Levels.error:
+                        return console.error.apply(console, msg);
+                }
             }
         }
 
@@ -82,6 +84,84 @@
          */
         public groupEnd() {
             console.groupEnd();
+        }
+
+        public format(logger: Logger, message: string, level: Logs.Levels) {
+            var finalMessage = "";
+            if (logger.Config && logger.Config.prefix) finalMessage += logger.Config.prefix + " # ";
+            if (this.config.showLoggerNameInMessage) finalMessage += logger.name + " # ";
+            if (this.config.showLevelInMessage) finalMessage += logginLevelToString(level) + " # ";
+            finalMessage += message;
+            return finalMessage;
+        }
+    }
+
+    export class BufferAppender implements ILogAppender {
+        public config: Logs.ILoggerConfig;
+        public buffer: any[];
+
+        /**
+         * Appender writing to console
+         * @class WinJSContrib.Logs.Appenders.BufferAppender
+         */
+        constructor(config?: Logs.ILoggerConfig) {
+            this.config = config || { level: Logs.Levels.inherit };
+            this.buffer = [];
+        }
+
+        /**
+         * clone appender
+         * @function WinJSContrib.Logs.Appenders.BufferAppender.prototype.clone
+         */
+        public clone() {
+            return new WinJSContrib.Logs.Appenders.BufferAppender(this.config);
+        }
+
+        /**
+         * log item
+         * @function WinJSContrib.Logs.Appenders.BufferAppender.prototype.log
+         * @param {string} message log message
+         * @param {WinJSContrib.Logs.Levels} log level
+         */
+        public log(logger: Logs.Logger, message: string, level: Logs.Levels, ...args) {
+            if (this.config.level == Logs.Levels.inherit || level >= this.config.level) {
+                var msg = [new Date().getTime()+ "", Logs.Levels[level].toUpperCase(), this.format(logger, message, level)];
+                if (args.length) {
+                    args.forEach((a) => {
+                        if (typeof a == "object")
+                            a = JSON.stringify(a);
+
+                        msg.push(a);
+                    });
+                }
+
+
+                this.buffer.push(msg.join(" "));
+            }
+        }
+
+        /**
+         * create log group
+         * @function WinJSContrib.Logs.Appenders.BufferAppender.prototype.group
+         */
+        public group(title: string) {
+            
+        }
+
+        /**
+         * create collapsed log group
+         * @function WinJSContrib.Logs.Appenders.BufferAppender.prototype.groupCollapsed
+         */
+        public groupCollapsed(title: string) {
+            
+        }
+
+        /**
+         * close log group
+         * @function WinJSContrib.Logs.Appenders.BufferAppender.prototype.groupEnd
+         */
+        public groupEnd() {
+            
         }
 
         public format(logger: Logger, message: string, level: Logs.Levels) {
@@ -161,6 +241,8 @@ module WinJSContrib.Logs {
         "DefaultConsole": new Appenders.ConsoleAppender()
     };
 
+    export var DefaultAppenders = <Appenders.ILogAppender[]>[];
+
     /**
      * get a logger, logger is created if it does not exists
      * @function WinJSContrib.Logs.getLogger
@@ -232,8 +314,8 @@ module WinJSContrib.Logs {
 
     export class Logger {
         public appenders: Array<WinJSContrib.Logs.Appenders.ILogAppender>;
-        _config: ILoggerConfig;
-        _level: Logs.Levels;
+        private _config: ILoggerConfig;
+        private _level: Logs.Levels;
         public name: string;
         static noop = (message: string, ...args) => { };
 
@@ -291,20 +373,28 @@ module WinJSContrib.Logs {
             } else {
                 this._config.appenders = [];
             }
+            this.checkLevel();
         }
 
         public get Level(): Logs.Levels {
-            return this._level;
+            if (this._level)
+                return this._level;
+            else
+                return this._config.level;
         }
 
         public set Level(val) {
             this._level = val;
              
+            this.checkLevel();     
+        }
+
+        public checkLevel(){
             if (this._level <= Logs.Levels.verbose) { this.verbose = Logger.verbose; } else { this.verbose = Logger.noop }
             if (this._level <= Logs.Levels.debug) { this.debug = Logger.debug; } else { this.debug = Logger.noop }
             if (this._level <= Logs.Levels.info) { this.info = Logger.info; } else { this.info = Logger.noop }
             if (this._level <= Logs.Levels.warn) { this.warn = Logger.warn; } else { this.warn = Logger.noop }
-            if (this._level <= Logs.Levels.error) { this.error = Logger.error; } else { this.error= Logger.noop }            
+            if (this._level <= Logs.Levels.error) { this.error = Logger.error; } else { this.error = Logger.noop }       
         }
 
         /**
@@ -340,7 +430,7 @@ module WinJSContrib.Logs {
          */
         public log(message: string, level: Logs.Levels, ...args) {
             // If general logging level is set to 'none', returns
-            if (this._config.level === WinJSContrib.Logs.Levels.off || level < this._config.level)
+            if ((this.Level === WinJSContrib.Logs.Levels.off) || (level < this.Level))
                 return;
 
             if (!this.appenders || !this.appenders.length)
@@ -352,6 +442,10 @@ module WinJSContrib.Logs {
                     fnargs.push(args[i]);
                 }
             }
+
+            DefaultAppenders.forEach((a) => {
+                a.log.apply(a, fnargs);
+            });
 
             this.appenders.forEach((a) => {
                 a.log.apply(a, fnargs);

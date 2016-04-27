@@ -49,38 +49,54 @@
     <TargetPlatformMinVersion>10.0.10240.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>$(VersionNumberMajor).$(VersionNumberMinor)</MinimumVisualStudioVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <PackageCertificateKeyFile>MCNEXT WinJS Contrib W10_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <PackageCertificateKeyFile>MCNEXT WinJS Contrib W10_StoreKey.pfx</PackageCertificateKeyFile>
+    <PackageCertificateThumbprint>1B158330071F040E7C51D1B85ADC8F8498F9BE80</PackageCertificateThumbprint>
   </PropertyGroup>
   <ItemGroup>
     <AppxManifest Include="package.appxmanifest">
       <SubType>Designer</SubType>
     </AppxManifest>
+    <Content Include="..\..\..\..\dist\bin\css\winjscontrib.ui.itemswipe.css">
+      <Link>css\winjscontrib\winjscontrib.ui.itemswipe.css</Link>
+    </Content>
+    <Content Include="..\..\..\..\dist\bin\js\winjscontrib.ui.flipviewpager.js">
+      <Link>scripts\winjscontrib\winjscontrib.ui.flipviewpager.js</Link>
+    </Content>
+    <Content Include="..\..\..\..\dist\bin\js\winjscontrib.ui.grid.js">
+      <Link>scripts\winjscontrib\winjscontrib.ui.grid.js</Link>
+    </Content>
+    <Content Include="..\..\..\..\dist\bin\js\winjscontrib.ui.webcomponents.js">
+      <Link>scripts\winjscontrib\winjscontrib.ui.webcomponents.js</Link>
+    </Content>
     <Content Include="..\..\..\Controls\winjscontrib.ui.aspectratio.js">
       <Link>scripts\winjscontrib\winjscontrib.ui.aspectratio.js</Link>
     </Content>
     <Content Include="..\..\..\Controls\winjscontrib.ui.autosuggest.js">
       <Link>scripts\winjscontrib\winjscontrib.ui.autosuggest.js</Link>
     </Content>
+    <Content Include="..\..\..\Controls\winjscontrib.ui.calendar.css">
+      <Link>css\winjscontrib\winjscontrib.ui.calendar.css</Link>
+    </Content>
+    <Content Include="..\..\..\Controls\winjscontrib.ui.calendar.js">
+      <Link>scripts\winjscontrib\winjscontrib.ui.calendar.js</Link>
+    </Content>
     <Content Include="..\..\..\Controls\winjscontrib.ui.flipview.js">
       <Link>scripts\winjscontrib\winjscontrib.ui.flipview.js</Link>
-    </Content>
-    <Content Include="..\..\..\Controls\winjscontrib.ui.flipviewpager.js">
-      <Link>winjscontrib.ui.flipviewpager.js</Link>
     </Content>
     <Content Include="..\..\..\Controls\winjscontrib.ui.fowrapper.js">
       <Link>scripts\winjscontrib\winjscontrib.ui.fowrapper.js</Link>
     </Content>
-    <Content Include="..\..\..\Controls\winjscontrib.ui.grid.js">
-      <Link>winjscontrib.ui.grid.js</Link>
-    </Content>
     <Content Include="..\..\..\Controls\winjscontrib.ui.itemswipe.js">
       <Link>scripts\winjscontrib\winjscontrib.ui.itemswipe.js</Link>
     </Content>
+    <Content Include="..\..\..\Controls\winjscontrib.ui.time.css">
+      <Link>css\winjscontrib\winjscontrib.ui.time.css</Link>
+    </Content>
+    <Content Include="..\..\..\Controls\winjscontrib.ui.time.js">
+      <Link>scripts\winjscontrib\winjscontrib.ui.time.js</Link>
+    </Content>
     <Content Include="..\..\..\Controls\winjscontrib.ui.visualstate.js">
       <Link>scripts\winjscontrib\winjscontrib.ui.visualstate.js</Link>
-    </Content>
-    <Content Include="..\..\..\Core\winjscontrib.ui.webcomponents.js">
-      <Link>winjscontrib.ui.webcomponents.js</Link>
     </Content>
     <Content Include="..\..\..\Common\segoe.symbol.css">
       <Link>css\winjscontrib\segoe.symbol.css</Link>
@@ -99,9 +115,6 @@
     </Content>
     <Content Include="..\..\..\Common\winjscontrib.dynamicscripts.js">
       <Link>scripts\winjscontrib\winjscontrib.dynamicscripts.js</Link>
-    </Content>
-    <Content Include="..\..\..\Common\winjscontrib.logger.js">
-      <Link>scripts\winjscontrib\winjscontrib.logger.js</Link>
     </Content>
     <Content Include="..\..\..\Common\winjscontrib.messenger.js">
       <Link>scripts\winjscontrib\winjscontrib.messenger.js</Link>
@@ -184,9 +197,6 @@
     <Content Include="..\..\..\Controls\winjscontrib.ui.flipviewpager.css">
       <Link>css\winjscontrib\winjscontrib.ui.flipviewpager.css</Link>
     </Content>
-    <Content Include="..\..\..\Controls\winjscontrib.ui.flipviewpager.js">
-      <Link>scripts\winjscontrib\winjscontrib.ui.flipviewpager.js</Link>
-    </Content>
     <Content Include="..\..\..\Controls\winjscontrib.ui.flipviewpager.less">
       <Link>css\winjscontrib\winjscontrib.ui.flipviewpager.less</Link>
     </Content>
@@ -207,9 +217,6 @@
     </Content>
     <Content Include="..\..\..\Controls\winjscontrib.ui.globalprogress.less">
       <Link>css\winjscontrib\winjscontrib.ui.globalprogress.less</Link>
-    </Content>
-    <Content Include="..\..\..\Controls\winjscontrib.ui.grid.js">
-      <Link>scripts\winjscontrib\winjscontrib.ui.grid.js</Link>
     </Content>
     <Content Include="..\..\..\Controls\winjscontrib.ui.hub.css">
       <Link>css\winjscontrib\winjscontrib.ui.hub.css</Link>
@@ -267,9 +274,6 @@
     </Content>
     <Content Include="..\..\..\Core\winjscontrib.core.js">
       <Link>scripts\winjscontrib\winjscontrib.core.js</Link>
-    </Content>
-    <Content Include="..\..\..\Core\winjscontrib.ui.webcomponents.js">
-      <Link>scripts\winjscontrib\winjscontrib.ui.webcomponents.js</Link>
     </Content>
     <Content Include="..\..\..\DataContainer\winjscontrib.datacontainer.cordova.database.js">
       <Link>scripts\winjscontrib\winjscontrib.datacontainer.cordova.database.js</Link>
@@ -337,14 +341,9 @@
     <Content Include="js\mcnext\mcnext.backgrounddownloads.js" />
     <Content Include="js\mcnext\mcnext.ui.datetimescroller.js" />
     <Content Include="js\movies.js" />
+    <None Include="Package.StoreAssociation.xml" />
+    <None Include="MCNEXT WinJS Contrib W10_StoreKey.pfx" />
     <Content Include="TODO.txt" />
-    <Content Include="WinJS\css\ui-dark.css" />
-    <Content Include="WinJS\css\ui-light.css" />
-    <Content Include="WinJS\fonts\Symbols.ttf" />
-    <Content Include="WinJS\js\en-US\ui.strings.js" />
-    <Content Include="WinJS\js\WinJS.js" />
-    <Content Include="WinJS\js\WinJS.intellisense.js" />
-    <Content Include="WinJS\js\WinJS.intellisense-setup.js" />
     <None Include="MCNEXT WinJS Contrib W10_TemporaryKey.pfx" />
   </ItemGroup>
   <ItemGroup>

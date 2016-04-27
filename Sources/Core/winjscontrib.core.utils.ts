@@ -25,15 +25,10 @@ interface Object {
 }
 
 interface String {
-    format(a1, a2);
-    format(a1, a2, a3);
-    padLeft(length, leadingChar);
-    startsWith(e);
-    endsWith(e);
-}
-
-declare module WinJS.UI {
-	var optionsParser: any;
+    format(...ag:any[]) : string;
+    padLeft(length, leadingChar): string;
+    startsWith(e: string): boolean;
+    endsWith(e: string): boolean;
 }
 
 if (!Object.map) {
@@ -98,11 +93,20 @@ module WinJSContrib.Promise {
 
         return dataPromise.then(function (items) {
             var queueP = function (p, item) {
-                return p.then(function (r) {
-                    return WinJS.Promise.as(promiseCallback(item)).then(function (r) {
-                        results.push(r);
-                    });
+                var prComplete, prError;
+                var result = new WinJS.Promise(function(c, e) {
+                    prComplete = c;
+                    prError = e;
                 });
+
+                p.then(function (previous) {
+                    WinJS.Promise.as(promiseCallback(item, previous)).then(function(r) {
+                        results.push(r);
+                        return r;
+                    }).then(prComplete, prError);
+                });
+
+                return result;
             }
 
 			for (var i = 0, l = items.length; i < l; i++) {
@@ -174,7 +178,7 @@ module WinJSContrib.Promise {
      * @param {function} promiseCallback function applyed to each item (could return a promise for item callback completion)
      * @returns {WinJS.Promise}
      */
-    export function batch(dataArray, batchSize, promiseCallback) {
+    export function batch(dataArray, batchSize, promiseCallback, batchWrapCallback?) {
         if (!dataArray) {
             return WinJS.Promise.wrap([]);
         }
@@ -187,15 +191,31 @@ module WinJSContrib.Promise {
             var hasErrors = false;
 
             var queueBatch = function (p, items) {
-                //var batchresults = [];
-                return p.then(function (r) {
-                    return WinJS.Promise.join(items.map(function (item) { return WinJS.Promise.as(promiseCallback(item)); })).then(function (results) {
-                        results = results.concat(results);
-                    }, function (errors) {
-                            results = results.concat(errors);
-                            hasErrors = true;
-                        });
+                var prComplete, prError;
+                var result = new WinJS.Promise(function(c, e) {
+                    prComplete = c;
+                    prError = e;
                 });
+
+                p.then(function(r) {
+                    WinJS.Promise.join(items.map(function(item, index) {
+                        return WinJS.Promise.as(promiseCallback(item, index));
+                    })).then(function(results) {
+                        if (batchWrapCallback)
+                            return batchWrapCallback(results);
+
+                        return results;
+                    }).then(function(results) {
+                        results = results.concat(results);
+                        return results;
+                    }, function(errors) {
+                        results = results.concat(errors);
+                        hasErrors = true;
+                        return results;
+                    }).then(prComplete, prError);
+                });
+                
+                return result;
             }
 
             for (var i = 0, l = items.length; i < l; i++) {
@@ -226,6 +246,14 @@ module WinJSContrib.Promise {
 
 
 module WinJSContrib.Utils {
+	export class EventDispatcher {
+        dispatchEvent(type: string, data: any){}
+        addEventListener(type: string, callback: Function){}
+        removeEventListener(type: string, callback: Function){}
+    }
+
+    Utils.EventDispatcher = <typeof EventDispatcher>WinJS.Class.mix(EventDispatcher, WinJS.Utilities.eventMixin);
+
 	/**
 	 * extend an object with properties from subsequent objects
 	 * @function WinJSContrib.Utils.extend
@@ -405,6 +433,9 @@ module WinJSContrib.Utils {
     * @returns {Object} property value
     */
     export function readProperty(source, properties) {
+		if (!source)
+			return null;
+		
         if (typeof properties == 'string' && source[properties])
             return source[properties];
 
@@ -593,7 +624,7 @@ module WinJSContrib.Utils {
      * @param {string} s
      * @returns {string}
      */
-    export function removeAccents(s) {
+    export function removeAccents(s:string) : string {
         var r = s.toLowerCase();
         r = r.replace(new RegExp("[àáâãäå]", 'g'), "a");
         r = r.replace(new RegExp("æ", 'g'), "ae");

@@ -1,13 +1,6 @@
 ﻿declare module WinJSContrib.Utils {
     function readProperty(obj: any, name: string): any;
 }
-declare module WinJSContrib.Messenger {
-    class SmartWorker {
-        constructor(path: string);
-        start(eventname: string, data?: any): any;
-        dispose(): any;
-    }
-}
 declare module WinJSContrib.Search {
     /**
      * definition for a field
@@ -16,6 +9,9 @@ declare module WinJSContrib.Search {
      * @example
      * { weight : 2}
      */
+    interface FieldDefinition {
+        weight?: number;
+    }
     /**
      * Definition of an index content
      * @typedef {Object} WinJSContrib.Search.IndexDefinition
@@ -24,6 +20,13 @@ declare module WinJSContrib.Search {
      * @example
      * { key: 'id', fields: { "title": { weight : 5}, "description.detail": { weight : 2}}}
      */
+    interface FieldDefinitionMap {
+        [name: string]: FieldDefinition;
+    }
+    interface IndexDefinition {
+        key: string;
+        fields: FieldDefinitionMap;
+    }
     /**
      * Small text search features based on objet indexing and text stemming. It's inspired by tools like Lucene.
      * For now indexes are stored with WinRT files, but it will soon be extended to support an extensible storage mecanism
@@ -41,19 +44,39 @@ declare module WinJSContrib.Search {
 
 declare var __global: any;
 declare module WinJSContrib.Search {
+    /**
+     * optional properties for animations
+     * @typedef {Object} WinJSContrib.Search.ISearchResultItem
+     * @property {number} rank ranking for the item
+     * @property {Object} key unique key defined for the item
+     * @property {Object} item item data
+     */
     interface ISearchResultItem {
         rank: number;
         key: any;
         item: any;
     }
+    interface IIndexedItemToken {
+        items: string[];
+        untokenized: string;
+    }
+    interface IIndexedItemTokens {
+        tokens: IIndexedItemToken;
+        weight: number;
+    }
+    interface IIndexedItem {
+        items: IIndexedItemTokens[];
+        rawdata: any;
+        key: any;
+    }
     class Index {
         name: string;
-        definition: any;
+        definition: WinJSContrib.Search.IndexDefinition;
         onprogress: any;
         folderPromise: any;
         stopWords: any[];
         container: WinJSContrib.DataContainer.IDataContainer;
-        items: any[];
+        items: IIndexedItem[];
         storeData: boolean;
         pipeline: WinJSContrib.Search.Stemming.Pipeline;
         /**
@@ -61,11 +84,13 @@ declare module WinJSContrib.Search {
          * @class WinJSContrib.Search.Index
          * @classdesc
          * This class is the heart of the search engine. operations performed by this object are synchronous but exposes as promises.
-         * This way Index is almost interchangeable with {@link WinJSContrib.Search.IndexWorkerProxy}
+         * This way Index is almost interchangeable with {@link WinJSContrib.Search.IndexWorkerProxy}.
+         * Depending of the size of your index and targeted devices, it could be faster to run search in main "thread".
          * @param {string} name index name
          * @param {WinJSContrib.Search.IndexDefinition} definition index definition
+         * @param {WinJSContrib.DataContainer.IDataContainer} container optional parameter to explicitely specify the way index is stored
          */
-        constructor(name: any, definition: any, container?: WinJSContrib.DataContainer.IDataContainer);
+        constructor(name: any, definition: WinJSContrib.Search.IndexDefinition, container?: WinJSContrib.DataContainer.IDataContainer);
         /**
          * get number of items in index
          * @function WinJSContrib.Search.Index.prototype.count
@@ -88,8 +113,8 @@ declare module WinJSContrib.Search {
          * @function WinJSContrib.Search.Index.prototype.export
          */
         export(): {
-            definition: any;
-            items: any[];
+            definition: IndexDefinition;
+            items: IIndexedItem[];
         };
         /**
          * serialize index to string
@@ -118,7 +143,7 @@ declare module WinJSContrib.Search {
          * search index
          * @function WinJSContrib.Search.Index.prototype.search
          * @param {string} querytext
-         * @returns {WinJS.Promise} search result
+         * @returns {WinJS.Promise<WinJSContrib.Search.ISearchResultItem[]>} search result
          */
         search(querytext: any, options: any): WinJS.Promise<ISearchResultItem[]>;
         _searchItem(searchtokens: any, indexitem: any): ISearchResultItem;
@@ -127,11 +152,7 @@ declare module WinJSContrib.Search {
          * @function WinJSContrib.Search.Index.prototype.define
          */
         define(obj: any): void;
-        _add(obj: any): WinJS.IPromise<{
-            items: any[];
-            rawdata: any;
-            key: any;
-        }>;
+        _add(obj: any): WinJS.IPromise<IIndexedItem>;
         /**
          * add an object to index
          * @function WinJSContrib.Search.Index.prototype.add
@@ -139,18 +160,14 @@ declare module WinJSContrib.Search {
          * @param {WinJSContrib.Search.IndexDefinition} definition index definition (optional), use index's definition if not defined
          * @returns {WinJS.Promise}
          */
-        add(obj: any): WinJS.IPromise<WinJS.IPromise<{
-            items: any[];
-            rawdata: any;
-            key: any;
-        }>>;
+        add(obj: any): WinJS.IPromise<WinJS.IPromise<IIndexedItem>>;
         /**
          * add an array of objects to index
          * @function WinJSContrib.Search.Index.prototype.addRange
          * @param {Array} items items array
          * @returns {WinJS.Promise}
          */
-        addRange(arr: any, progress: any): WinJS.IPromise<{
+        addRange(arr: any, progress?: Function): WinJS.IPromise<{
             indexed: number;
         }>;
         refresh(): void;
@@ -159,10 +176,7 @@ declare module WinJSContrib.Search {
          * @function WinJSContrib.Search.Index.prototype.processText
          * @param {string} text
          */
-        processText(text: any): {
-            items: any[];
-            untokenized: any;
-        };
+        processText(text: any): IIndexedItemToken;
         /**
          * Check if a word is a stopword
          * @function WinJSContrib.Search.Index.prototype.checkWord
@@ -238,7 +252,7 @@ declare module WinJSContrib.Search {
 
 declare module WinJSContrib.Search {
     class IndexWorkerProxy {
-        worker: WinJSContrib.Messenger.SmartWorker;
+        worker: WinJSContrib.MessengerClass;
         /**
          * @classdesc
          * Proxy for a {@link WinJSContrib.Search.Index} running in a web worker
@@ -277,7 +291,7 @@ declare module WinJSContrib.Search {
          * @param {Object} options
          * @returns {WinJS.Promise}
          */
-        add(data: any, options: any): any;
+        add(data: any, options?: any): any;
         /**
          * add an array of objects to index
          * @function WinJSContrib.Search.IndexWorkerProxy.prototype.addRange
@@ -285,7 +299,7 @@ declare module WinJSContrib.Search {
          * @param {Object} options
          * @returns {WinJS.Promise}
          */
-        addRange(data: any, options: any): any;
+        addRange(data: any, options?: any): any;
         /**
          * release proxy
          * @function WinJSContrib.Search.IndexWorkerProxy.prototype.dispose
@@ -313,9 +327,6 @@ declare module WinJSContrib.Search {
 }
 
 declare module WinJSContrib.Search.Stemming {
-    /**
-     * @namespace
-     */
     class Pipeline {
         _processors: any[];
         /**
@@ -344,20 +355,28 @@ declare module WinJSContrib.Search.Stemming {
     }
 }
 declare module WinJSContrib.Search.Stemming.Presets {
+    /**
+     * very basic ruleset
+     * @field WinJSContrib.Search.Stemming.Presets.standard
+     */
     var standard: string[];
+    /**
+     * ruleset with almost all stemming functions
+     * @field WinJSContrib.Search.Stemming.Presets.full
+     */
     var full: string[];
 }
 declare module WinJSContrib.Search.Stemming.StopWords {
     /**
-    * common stop words
+    * common stop words (for english and french)
     * @field WinJSContrib.Search.Stemming.StopWords.common
     */
     var common: string[];
 }
 declare module WinJSContrib.Search.Stemming.Op {
     /**
-     * built-in stemmings
-     * @namespace
+     * built-in stemmings Operator functions
+     * @namespace WinJSContrib.Search.Stemming.Op
      */
     /**
      *

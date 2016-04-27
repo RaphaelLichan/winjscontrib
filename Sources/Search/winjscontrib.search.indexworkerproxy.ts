@@ -1,6 +1,6 @@
 ﻿module WinJSContrib.Search {
     export class IndexWorkerProxy {
-        worker : WinJSContrib.Messenger.SmartWorker;
+        worker : WinJSContrib.MessengerClass;
 
         /**
          * @classdesc
@@ -12,7 +12,7 @@
          */
         constructor(name : string, definition, workerpath?: string) {
             var wrapper = this;
-            wrapper.worker = new WinJSContrib.Messenger.SmartWorker(workerpath || WinJSContrib.Search.workerPath);
+            wrapper.worker = WinJSContrib.SmartWorker(workerpath || WinJSContrib.Search.workerPath);
             wrapper.init(name, definition);
         }
 
@@ -54,7 +54,7 @@
          * @param {Object} options
          * @returns {WinJS.Promise}
          */
-        public add(data, options) {
+        public add(data, options?) {
             return this.worker.start('index', { items: [data], options: options });
         }
 
@@ -65,7 +65,7 @@
          * @param {Object} options
          * @returns {WinJS.Promise}
          */
-        public addRange(data, options) {
+        public addRange(data, options?) {
             return this.worker.start('index', { items: data, options: options });
         }
 

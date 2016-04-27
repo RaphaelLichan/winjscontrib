@@ -64,12 +64,14 @@ module WinJSContrib.UI {
         public addEvent(e, eventName: string, handler, capture?: boolean) {
             var tracker = this;
             e.addEventListener(eventName, handler, capture);
-            var unregister = function () {
+            var unregister = function(disableSplice) {
                 try {
                     e.removeEventListener(eventName, handler);
-                    var idx = tracker.events.indexOf(unregister);
-                    if (idx >= 0) {
-                        tracker.events.splice(idx, 1);
+                    if (!disableSplice) {
+                        var idx = tracker.events.indexOf(unregister);
+                        if (idx >= 0) {
+                            tracker.events.splice(idx, 1);
+                        }
                     }
                 } catch (exception) {
                     console.error('unexpected error while releasing callback ' + exception.message);
@@ -88,9 +90,16 @@ module WinJSContrib.UI {
          * @param {function} handler
          */
         public addBinding(e, eventName: string, handler) {
+            var tracker = this;
             e.bind(eventName, handler);
-            var unregister = function () {
+            var unregister = function(disableSplice) {
                 e.unbind(eventName, handler);
+                if (!disableSplice) {
+                    var idx = tracker.events.indexOf(unregister);
+                    if (idx >= 0) {
+                        tracker.events.splice(idx, 1);
+                    }
+                }
             };
             this.events.push(unregister);
             return unregister;
@@ -101,8 +110,10 @@ module WinJSContrib.UI {
          * @function WinJSContrib.UI.EventTracker.prototype.dispose
          */
         public dispose() {
-            for (var i = 0; i < this.events.length; i++) {
-                this.events[i]();
+            if (this.events && this.events.length) {
+                for (var i = 0; i < this.events.length; i++) {
+                    this.events[i](true);
+                }
             }
             this.events = [];
         }
@@ -181,7 +192,7 @@ module WinJSContrib.UI {
      * @returns {WinJS.Promise}
      */
     export function elementLoaded(elt, url) {
-        return new WinJS.Promise(function (complete, error) {
+        return new WinJS.Promise(function(complete, error) {
             function onerror(e) {
                 elt.onload = undefined;
                 elt.onerror = undefined;
@@ -216,7 +227,7 @@ module WinJSContrib.UI {
      * @returns {WinJS.Promise}
      */
     export function loadImage(imgUrl) {
-        return new WinJS.Promise(function (complete, error) {
+        return new WinJS.Promise(function(complete, error) {
             var image = new Image();
 
             function onerror(e) {
@@ -272,20 +283,20 @@ module WinJSContrib.UI {
      * @returns {WinJS.Promise}
      */
     export function removeElementAnimation(elt) {
-        return new WinJS.Promise(function (complete, error) {
+        return new WinJS.Promise(function(complete, error) {
             var remainings = WinJSContrib.UI.listElementsAfterMe(elt);
             var anim = WinJS.UI.Animation.createDeleteFromListAnimation([
                 elt
             ], remainings);
             elt.style.position = "fixed";
             elt.style.opacity = '0';
-            anim.execute().done(function () {
+            anim.execute().done(function() {
                 complete(elt);
             });
         });
     }
 
-    function bindAction(el, element, control) {
+    function bindAction(el, element, control, item?) {
         if (!el)
             return;
 
@@ -294,13 +305,13 @@ module WinJSContrib.UI {
 
         var action = control[actionName];
         if (action && typeof action === 'function') {
-            WinJSContrib.UI.tap(el, function (eltarg) {
+            WinJSContrib.UI.tap(el, function(eltarg) {
                 var p = WinJS.Promise.wrap(actionArgs);
                 var actionArgs = eltarg.dataset.pageActionArgs || el.getAttribute('tap-args');
 
                 if (actionArgs && typeof actionArgs == 'string') {
                     var tmp = WinJSContrib.Utils.readValue(eltarg, actionArgs);
-                    p = WinJS.Promise.as(tmp).then(function (val) {
+                    p = WinJS.Promise.as(tmp).then(function(val) {
                         if (typeof val === 'string') {
                             try {
                                 val = WinJS.UI.optionsParser(val, window);
@@ -314,11 +325,11 @@ module WinJSContrib.UI {
                     });
                     if (tmp) {
                         actionArgs = tmp;
-                    } 
+                    }
                 }
 
-                return p.then(function (arg) {
-                    return control[actionName].bind(control)({ elt: eltarg, args: arg });
+                return p.then(function(arg) {
+                    return control[actionName].bind(control)({ elt: eltarg, args: arg, item : item });
                 });
             });
         }
@@ -331,18 +342,19 @@ module WinJSContrib.UI {
      * @function WinJSContrib.UI.bindPageActions
      * @param {HTMLElement} element root node crawled for page actions
      * @param {Object} control control owning functions to call
+     * @param {item} optionnal argument for adding an item to call
      */
-    export function bindPageActions(element, control) {
+    export function bindPageActions(element, control, item?) {
         var elements = element.querySelectorAll('*[data-page-action], *[tap]');
         if (elements && elements.length) {
             for (var i = 0, l = elements.length; i < l; i++) {
                 var el = elements[i];
-                bindAction(el, element, control);
+                bindAction(el, element, control, item);
             }
         }
     }
 
-    function bindLink(el, element) {
+    function bindLink(el, element, item?) {
         if (!el)
             return;
 
@@ -368,13 +380,13 @@ module WinJSContrib.UI {
                 }
             }
 
-            WinJSContrib.UI.tap(el, function (eltarg) {
+            WinJSContrib.UI.tap(el, function(eltarg) {
                 var p = WinJS.Promise.wrap();
                 var actionArgs = eltarg.dataset.pageActionArgs || el.getAttribute('linkto-args');
                 if (actionArgs && typeof actionArgs == 'string') {
 
                     var tmp = WinJSContrib.Utils.readValue(eltarg, actionArgs);
-                    p = WinJS.Promise.as(tmp).then(function (val) {
+                    p = WinJS.Promise.as(tmp).then(function(val) {
                         if (typeof val === 'string') {
                             try {
                                 val = WinJS.UI.optionsParser(val, window);
@@ -387,7 +399,10 @@ module WinJSContrib.UI {
                     });
                 }
 
-                return p.then(function (actionArgs) {
+                if (!actionArgs && item)
+                    actionArgs = { item: item };
+
+                return p.then(function(actionArgs) {
                     if (!applink && WinJSContrib.UI.parentNavigator && WinJSContrib.UI.parentNavigator(eltarg)) {
                         var nav = WinJSContrib.UI.parentNavigator(eltarg);
                         return nav.navigate(target, actionArgs);
@@ -406,12 +421,12 @@ module WinJSContrib.UI {
      * @function WinJSContrib.UI.bindPageLinks
      * @param {HTMLElement} element root node crawled for page actions
      */
-    export function bindPageLinks(element) {
+    export function bindPageLinks(element, item?) {
         var elements = element.querySelectorAll('*[data-page-link], *[linkto]');
         if (elements && elements.length) {
             for (var i = 0, l = elements.length; i < l; i++) {
                 var el = elements[i];
-                bindLink(el, element);
+                bindLink(el, element, item);
             }
         }
     }
@@ -467,9 +482,9 @@ module WinJSContrib.UI {
      * @param {HTMLElement} element root node crawled for page actions
      * @param {Object} control control owning functions to call
      */
-    export function bindActions(element, control) {
-        WinJSContrib.UI.bindPageActions(element, control);
-        WinJSContrib.UI.bindPageLinks(element);
+    export function bindActions(element, control, item?) {
+        WinJSContrib.UI.bindPageActions(element, control, item);
+        WinJSContrib.UI.bindPageLinks(element, item);
     }
 
     /**
@@ -502,7 +517,7 @@ module WinJSContrib.UI {
         public dispose() {
             var ctrl = this;
             ctrl.linkedControl = null;
-            this.queries.forEach(function (q) {
+            this.queries.forEach(function(q) {
                 q.dispose();
             });
         }
@@ -525,14 +540,14 @@ module WinJSContrib.UI {
                 dispose: null
             }
 
-            var f = function (arg) {
+            var f = function(arg) {
                 if (arg.matches) {
                     ctrl._mediaEvent(arg, internalQuery);
                 }
             };
 
             mq.addListener(f);
-            internalQuery.dispose = function () {
+            internalQuery.dispose = function() {
                 mq.removeListener(f);
             }
 
@@ -554,7 +569,7 @@ module WinJSContrib.UI {
          */
         public check() {
             var ctrl = this;
-            ctrl.queries.forEach(function (q) {
+            ctrl.queries.forEach(function(q) {
                 var mq = window.matchMedia(q.query);
                 if (mq.matches) {
                     ctrl._mediaEvent({ matches: true }, q);
@@ -613,7 +628,7 @@ module WinJSContrib.UI {
         //control.navLocks = control.navLocks || [];
         //control.navLocks.isActive = true;
 
-        var backhandler = function (arg) {
+        var backhandler = function(arg) {
             var idx = registeredNavigationStack.indexOf(registration);
             if (idx === registeredNavigationStack.length - 1) {
                 registration.callback.bind(registration.control)(arg);
@@ -644,7 +659,7 @@ module WinJSContrib.UI {
 
         function cancelNavigation(args) {
             //this.eventTracker.addEvent(nav, 'beforenavigate', this._beforeNavigate.bind(this));
-            var p = new WinJS.Promise(function (c) { });
+            var p = new WinJS.Promise(function(c) { });
             args.detail.setPromise(p);
             //setImmediate(function () {
             p.cancel();
@@ -654,10 +669,16 @@ module WinJSContrib.UI {
         WinJS.Navigation.addEventListener('beforenavigate', cancelNavigation);
         if ((<any>window).Windows && (<any>window).Windows.Phone)
             (<any>window).Windows.Phone.UI.Input.HardwareButtons.addEventListener("backpressed", backhandler);
-        else
+        else {
             document.addEventListener("backbutton", backhandler);
+            var systemNavigationManager = null;
+            if (WinJSContrib.UI && (<any>WinJSContrib.UI).enableSystemBackButtonVisibility && (<any>window).Windows &&  (<any>window).Windows.UI &&   (<any>window).Windows.UI.Core &&   (<any>window).Windows.UI.Core.SystemNavigationManager) {
+                systemNavigationManager =  (<any>window).Windows.UI.Core.SystemNavigationManager.getForCurrentView();
+                systemNavigationManager.addEventListener('backrequested', backhandler);
+            }
 
-        var keypress = function (args) {
+        }
+        var keypress = function(args) {
             if (args.key === "Esc" || args.key === "Backspace") {
                 backhandler(args);
             }
@@ -668,7 +689,7 @@ module WinJSContrib.UI {
         if (WinJSContrib.UI.Application && WinJSContrib.UI.Application.navigator)
             WinJSContrib.UI.Application.navigator.addLock();
 
-        return function () {
+        return function() {
             if (WinJSContrib.UI.Application && WinJSContrib.UI.Application.navigator)
                 WinJSContrib.UI.Application.navigator.removeLock();
 
@@ -686,8 +707,15 @@ module WinJSContrib.UI {
             WinJS.Navigation.removeEventListener('beforenavigate', cancelNavigation);
             if ((<any>window).Windows && (<any>window).Windows.Phone)
                 (<any>window).Windows.Phone.UI.Input.HardwareButtons.removeEventListener("backpressed", backhandler);
-            else
+            else {
                 document.removeEventListener("backbutton", backhandler);
+                var systemNavigationManager = null;
+                if (WinJSContrib.UI && (<any>WinJSContrib.UI).enableSystemBackButtonVisibility && (<any>window).Windows &&  (<any>window).Windows.UI &&  (<any>window).Windows.UI.Core && (<any>window).Windows.UI.Core.SystemNavigationManager) {
+                    systemNavigationManager = (<any>window).Windows.UI.Core.SystemNavigationManager.getForCurrentView();
+                    systemNavigationManager.removeEventListener('backrequested', backhandler);
+                }
+
+            }
         }
     }
 
@@ -725,8 +753,10 @@ module WinJSContrib.UI {
         animDown: null,
         animUp: null,
         disableAnimation: false,
+        disableAria: false,
         awaitAnim: false,
-        errorDelay: 3000
+        errorDelay: 3000,
+        mapClickEvents : 0
     }
 
     if (WinJS && WinJS.UI && WinJS.UI.Animation) {
@@ -745,7 +775,7 @@ module WinJSContrib.UI {
         if (!element)
             return;
 
-        var ptDown = function (event) {
+        var ptDown = function(event) {
             var elt = event.currentTarget || event.target;
             var tracking = elt.mcnTapTracking;
             if (!elt.disabled && tracking && (event.button === undefined || event.button === 0 || (tracking.allowRickClickTap && event.button === 2))) {
@@ -766,12 +796,12 @@ module WinJSContrib.UI {
                 }
                 tracking.animDown(event.currentTarget);
                 if (tracking.tapOnDown) {
-                    tracking.callback(elt, event);
+                    tracking.invoke(elt, event);
                 }
             }
         }
 
-        var ptOut = function (event) {
+        var ptOut = function(event) {
             var elt = event.currentTarget || event.target;
             var tracking = elt.mcnTapTracking;
             if (tracking && tracking.pointerdown) {
@@ -786,7 +816,7 @@ module WinJSContrib.UI {
             }
         }
 
-        var ptUp = function (event) {
+        var ptUp = function(event) {
             var elt = event.currentTarget || event.target;
             var tracking = elt.mcnTapTracking;
             if (tracking && (event.button === undefined || event.button === 0 || (tracking.allowRickClickTap && event.button === 2))) {
@@ -796,7 +826,7 @@ module WinJSContrib.UI {
 
                 if (tracking && !tracking.tapOnDown) {
                     event.stopPropagation();
-                    var resolveTap = function () {
+                    var resolveTap = function() {
                         if (tracking && tracking.pointerdown) {
                             if (event.changedTouches) {
                                 var dX = Math.abs(tracking.pointerdown.x - event.changedTouches[0].clientX);
@@ -810,27 +840,8 @@ module WinJSContrib.UI {
                                 event.stopImmediatePropagation();
                                 event.stopPropagation();
                                 event.preventDefault();
-                                var res = tracking.callback(elt, event);
-                                if (res && WinJS.Promise.is(res)) {
-                                    elt.disabled = true;
-                                    WinJS.Utilities.addClass(elt, 'tap-working');
-                                    res.then(function () {
-                                        elt.disabled = false;
-                                        WinJS.Utilities.removeClass(elt, 'tap-working');
-                                    }, function (err) {
-                                        elt.disabled = false;
-                                        WinJS.Utilities.removeClass(elt, 'tap-working');
-                                        console.error(err);
-                                        WinJS.Application.queueEvent({ type: "mcn-taperror", error: err });
-                                        WinJS.Utilities.addClass(elt, 'tap-error');
-                                        if (tracking.errorDelay) {
-                                            tracking.pendingErrorTimeout = setTimeout(() => {
-                                                tracking.pendingErrorTimeout = null;
-                                                WinJS.Utilities.removeClass(elt, 'tap-error');
-                                            }, tracking.errorDelay);
-                                        }
-                                    })
-                                }
+
+                                tracking.invoke();
                             }
                             if (tracking && tracking.pointerdown)
                                 tracking.pointerdown = undefined;
@@ -868,11 +879,23 @@ module WinJSContrib.UI {
         WinJS.Utilities.addClass(element, 'tap');
 
         element.mcnTapTracking = element.mcnTapTracking || {};
+        
+        element.mcnTapTracking.disableAria = opt.disableAria || defaultTapBehavior.disableAria;
+        if (!element.mcnTapTracking.disableAria) {
+            if (!element.hasAttribute("tabindex"))
+                element.setAttribute("tabindex", "0");
+            if (!element.hasAttribute("role"))
+                element.setAttribute("role", "button");
+        }
+
         element.mcnTapTracking.eventTracker = new WinJSContrib.UI.EventTracker();
         element.mcnTapTracking.disableAnimation = opt.disableAnimation || defaultTapBehavior.disableAnimation;
         if (element.mcnTapTracking.disableAnimation) {
-            element.mcnTapTracking.animDown = function () { return WinJS.Promise.wrap() };
-            element.mcnTapTracking.animUp = function () { return WinJS.Promise.wrap() };
+            if (opt.disableAnimation)
+                WinJS.Utilities.addClass(element, 'tap-disableanimation');
+            
+            element.mcnTapTracking.animDown = function() { return WinJS.Promise.wrap() };
+            element.mcnTapTracking.animUp = function() { return WinJS.Promise.wrap() };
         } else {
             element.mcnTapTracking.animDown = opt.animDown || defaultTapBehavior.animDown;
             element.mcnTapTracking.animUp = opt.animUp || defaultTapBehavior.animUp;
@@ -882,9 +905,63 @@ module WinJSContrib.UI {
         element.mcnTapTracking.lock = opt.lock;
         element.mcnTapTracking.awaitAnim = opt.awaitAnim || defaultTapBehavior.awaitAnim;
         element.mcnTapTracking.errorDelay = opt.errorDelay || defaultTapBehavior.errorDelay;
+        element.mcnTapTracking.mapClickEvents = opt.mapClickEvents || defaultTapBehavior.mapClickEvents;
         element.mcnTapTracking.tapOnDown = opt.tapOnDown;
         element.mcnTapTracking.pointerModel = 'none';
-        element.mcnTapTracking.dispose = function () {
+        element.mcnTapTracking.invoke = function(arg) {
+            var elt = element;
+            if (elt && elt.mcnTapTracking) {
+                var tracking = elt.mcnTapTracking;
+                if (tracking) {
+                    var now = <any>(new Date());
+                    var dif = 9000;
+                    if (tracking.lastinvoke) {
+                        dif = now - tracking.lastinvoke;
+                    }
+
+                    if (dif < tracking.mapClickEvents) {
+                        if (arg && arg.preventDefault) {
+                            arg.preventDefault();
+                            arg.stopPropagation();
+                        }
+                        return;
+                    }
+
+                    var res = tracking.callback(elt, arg);
+                    tracking.lastinvoke = new Date();
+                    if (res && WinJS.Promise.is(res)) {
+                        elt.disabled = true;
+                        WinJS.Utilities.addClass(elt, 'tap-working');
+                        res.then(function() {
+                            elt.disabled = false;
+                            WinJS.Utilities.removeClass(elt, 'tap-working');
+                        }, function(err) {
+                            elt.disabled = false;
+                            WinJS.Utilities.removeClass(elt, 'tap-working');
+                            console.error(err);
+                            WinJS.Application.queueEvent({ type: "mcn-taperror", error: err });
+                            WinJS.Utilities.addClass(elt, 'tap-error');
+                            if (tracking.errorDelay) {
+                                tracking.pendingErrorTimeout = setTimeout(() => {
+                                    tracking.pendingErrorTimeout = null;
+                                    WinJS.Utilities.removeClass(elt, 'tap-error');
+                                }, tracking.errorDelay);
+                            }
+                        })
+                    }
+                }
+            }
+        }
+
+        if (element.mcnTapTracking.mapClickEvents > 0) {
+            element.onclick = function(arg) {
+                if (element && arg.target == element && element.mcnTapTracking) {
+                    element.mcnTapTracking.invoke(arg);
+                }
+            }
+        }
+
+        element.mcnTapTracking.dispose = function() {
             WinJS.Utilities.removeClass(element, 'tap');
             this.eventTracker.dispose();
             element.mcnTapTracking = null;
@@ -898,31 +975,31 @@ module WinJSContrib.UI {
             element.mcnTapTracking.eventTracker.addEvent(element, 'pointerup', ptUp);
         } else if (window.Touch && !opt.noWebkitTouch) {
             element.mcnTapTracking.pointerModel = 'touch';
-            element.mcnTapTracking.eventTracker.addEvent(element, 'touchstart', function (arg) {
+            element.mcnTapTracking.eventTracker.addEvent(element, 'touchstart', function(arg) {
                 element.mcnTapTracking.cancelMouse = true;
                 ptDown(arg);
             });
-            element.mcnTapTracking.eventTracker.addEvent(element, 'touchcancel', function (arg) {
-                setTimeout(function () {
+            element.mcnTapTracking.eventTracker.addEvent(element, 'touchcancel', function(arg) {
+                setTimeout(function() {
                     if (element && element.mcnTapTracking) element.mcnTapTracking.cancelMouse = false;
                 }, 1000);
                 ptOut(arg);
             });
-            element.mcnTapTracking.eventTracker.addEvent(element, 'touchend', function (arg) {
-                setTimeout(function () {
+            element.mcnTapTracking.eventTracker.addEvent(element, 'touchend', function(arg) {
+                setTimeout(function() {
                     if (element && element.mcnTapTracking) element.mcnTapTracking.cancelMouse = false;
                 }, 1000);
                 ptUp(arg);
             });
 
-            element.mcnTapTracking.eventTracker.addEvent(element, 'mousedown', function (arg) {
+            element.mcnTapTracking.eventTracker.addEvent(element, 'mousedown', function(arg) {
                 if (!element.mcnTapTracking.cancelMouse)
                     ptDown(arg);
             });
-            element.mcnTapTracking.eventTracker.addEvent(element, 'mouseleave', function (arg) {
+            element.mcnTapTracking.eventTracker.addEvent(element, 'mouseleave', function(arg) {
                 ptOut(arg);
             });
-            element.mcnTapTracking.eventTracker.addEvent(element, 'mouseup', function (arg) {
+            element.mcnTapTracking.eventTracker.addEvent(element, 'mouseup', function(arg) {
                 if (!element.mcnTapTracking.cancelMouse)
                     ptUp(arg);
                 else
@@ -945,13 +1022,13 @@ module WinJSContrib.UI {
 	 */
     export function afterTransition(element, timeout?) {
         var timeOutRef = null;
-        return new WinJS.Promise(function (complete, error) {
-            var onaftertransition = function (event) {
+        return new WinJS.Promise(function(complete, error) {
+            var onaftertransition = function(event) {
                 if (event.srcElement === element) {
                     close();
                 }
             };
-            var close = function () {
+            var close = function() {
                 clearTimeout(timeOutRef);
                 element.removeEventListener("transitionend", onaftertransition, false);
                 complete();
@@ -1141,7 +1218,7 @@ module WinJSContrib.UI {
         styles(obj: any) {
             var st = this.element.style;
             var keys = Object.keys(obj);
-            keys.forEach(function (k) {
+            keys.forEach(function(k) {
                 st[k] = obj[k];
             });
             return this;
@@ -1217,6 +1294,64 @@ module WinJSContrib.UI {
                 new ctor(this.element, options);
             }
             return this;
+        }
+    }
+
+    export function dismissableShow(targetElement: HTMLElement, classPrefix: string, animationTarget?: HTMLElement) {
+        animationTarget = animationTarget || targetElement;
+        targetElement.classList.add(classPrefix + "-enter");
+        targetElement.getBoundingClientRect();
+        targetElement.classList.remove(classPrefix + "-leave");
+        targetElement.classList.remove(classPrefix + "-leave-active");
+
+        //setImmediate(() => {
+        WinJSContrib.UI.afterTransition(animationTarget).then(() => {
+            //if (targetElement.classList.contains(classPrefix + "-lea")) {
+            //    targetElement.classList.remove(classPrefix + "-enter");
+            //    targetElement.classList.remove(classPrefix + "-enter-active");
+            //}
+        });
+        targetElement.classList.add(classPrefix + "-enter-active");
+        //});
+    }
+
+    export function dismissableHide(targetElement: HTMLElement, classPrefix: string, animationTarget?: HTMLElement) {
+        animationTarget = animationTarget || targetElement;
+        targetElement.classList.add(classPrefix + "-leave");
+        targetElement.classList.remove(classPrefix + "-enter");
+        targetElement.classList.remove(classPrefix + "-enter-active");
+
+        setImmediate(() => {
+            WinJSContrib.UI.afterTransition(animationTarget).then(() => {
+                targetElement.classList.remove(classPrefix + "-leave");
+                targetElement.classList.remove(classPrefix + "-leave-active");
+            });
+            targetElement.classList.add(classPrefix + "-leave-active");
+        });
+    }
+
+    export function forwardFocus(container: HTMLElement, focusTarget: HTMLElement, allowed?: HTMLElement[]) {
+        var isInContainer = (elt: Element) => {
+            while (elt.parentElement && elt.parentElement != container) {
+                elt = elt.parentElement;
+            }
+
+            if (elt.parentElement == container)
+                return true;
+
+            return false;
+        }
+
+        var focusManager = (arg) => {
+            if (!isInContainer(arg.target) && (!allowed || !(allowed.indexOf(arg.target) >= 0))) {
+                focusTarget.focus();
+            }
+        }
+
+        document.addEventListener("focus", focusManager, true);
+
+        return function() {
+            document.removeEventListener("focus", focusManager);
         }
     }
 }

@@ -1,4 +1,10 @@
-﻿/*
+﻿/* 
+ * WinJS Contrib v2.1.0.5
+ * licensed under MIT license (see http://opensource.org/licenses/MIT)
+ * sources available at https://github.com/gleborgne/winjscontrib
+ */
+
+/*
 WARNING: this feature is experimental
 You must add winjscontrib.core.js before this file
 */
@@ -105,7 +111,7 @@ WinJSContrib.UI.WebComponents = WinJSContrib.UI.WebComponents || {};
 
 		if (scope && scope.pageLifeCycle) {
 			//if the component is owned by a page/fragment, we process the control according to page lifecycle
-			p = scope.pageLifeCycle.steps.render.attach(process);
+			p = scope.pageLifeCycle.steps.process.attach(process);
 		} else {
 			process();
 		}

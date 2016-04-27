@@ -6,8 +6,37 @@ declare module WinJSContrib.UI.WebComponents {
 var profiler = __global.msWriteProfilerMark || function () { };
 
 module WinJSContrib.UI.Pages {
+    function abs(uri) {
+        var a = window.document.createElement("a");
+        a.href = uri;
+        return a.href;
+    }
+
     var logger = WinJSContrib.Logs.getLogger("WinJSContrib.UI.Pages");
     export var verboseTraces = false;
+    export var preloadDelay = 250;
+
+    var loadedPages = {};
+
+    export function preload(...pathes: string[]) {
+        return WinJSContrib.Promise.waterfall(pathes, (path) =>{
+            return preloadPath(path);
+        })
+    }
+
+    export function preloadPath(path : string) {        
+        var absuri = abs(path);
+        if (!loadedPages[absuri]) {
+            logger.verbose("preload " + absuri);
+            loadedPages[absuri] = true;
+            return WinJS.Promise.timeout(preloadDelay).then(() => {
+                return WinJS.Utilities.Scheduler.schedule(() => {                    
+                    WinJS.UI.Fragments.cache(absuri);
+                }, WinJS.Utilities.Scheduler.Priority.idle, {}, "preload|" + absuri);
+            });
+        }        
+        return WinJS.Promise.wrap();
+    }
 
     /**
      * List of mixins to apply to each fragment managed by WinJS Contrib (through navigator or by calling explicitely {@link WinJSContrib.UI.Pages.fragmentMixin}).
@@ -37,19 +66,14 @@ module WinJSContrib.UI.Pages {
 		},
 	},
 		{
-			dispose: function () {
-				if (this._promises) {
-					this.cancelPromises();
-					this._promises = null;
-				}
+			initPageMixin : function(){
+                //this.promises = this.promises || [];
 			},
 
-			promises: {
-				configurable: true,
-				get: function () {
-					if (!this._promises)
-						this._promises = [];
-					return this._promises;
+			disposePageMixin: function () {
+				if (this.promises) {
+					this.cancelPromises();
+					this.promises = [];
 				}
 			},
 
@@ -71,21 +95,16 @@ module WinJSContrib.UI.Pages {
 			}
 		},
 		{
-			dispose: function () {
-				if (this._eventTracker) {
-					this._eventTracker.dispose();
-					this._eventTracker = null;
-				}
+			initPageMixin: function() {
+				this.eventTracker = new WinJSContrib.UI.EventTracker();
 			},
 
-			eventTracker: {
-				configurable: true,
-				get: function () {
-					if (!this._eventTracker)
-						this._eventTracker = new WinJSContrib.UI.EventTracker();
-					return this._eventTracker;
+			disposePageMixin: function() {
+				if (this.eventTracker) {
+					this.eventTracker.dispose();
+					this.eventTracker = null;
 				}
-			}
+			},
 		}];
 
 
@@ -147,6 +166,7 @@ module WinJSContrib.UI.Pages {
      * @param {Object} options rendering options
      */
     export function renderFragment(container, location, args, options) {
+        
         var fragmentCompleted;
         var fragmentError;
         options = options || {};
@@ -217,10 +237,14 @@ module WinJSContrib.UI.Pages {
 				});
 			}
 
-			elementCtrl.pageLifeCycle.steps.ready.attach(function () {
-				if (options.onready)
-					options.onready(elementCtrl.element, args);
+            if (options.onready) {
+                elementCtrl.pageLifeCycle.steps.ready.attach(function() {
+                    if (options.onready)
+                        options.onready(elementCtrl.element, args);
+                });
+            }
 
+            elementCtrl.pageLifeCycle.steps.enter.attach(function() {
                 if (elementCtrl.enterPageAnimation) {
                     return WinJS.Promise.as(elementCtrl.enterPageAnimation(element, options));
                 } else {
@@ -236,17 +260,86 @@ module WinJSContrib.UI.Pages {
         return fragmentPromise;
     }
 
+    export interface PageLifeCycle {
+        created: Date,
+        location: string,
+        log : (callback : ()=>void) => void,
+        stop: () => void,
+        steps: {
+            init: PageLifeCycleStep,
+            render: PageLifeCycleStep,
+            process: PageLifeCycleStep,
+            layout: PageLifeCycleStep,
+            ready: PageLifeCycleStep,
+            enter: PageLifeCycleStep,
+        },
+        initialDisplay: string
+    }
+
+    export class DefferedLoadings{
+        resolved: boolean;
+        page: any;
+        items: (() => void | WinJS.Promise<any>)[];
+
+        constructor(page) {
+            this.items = [];
+            this.page = page;
+            this.resolved = false;
+            page.promises.push(page.pageLifeCycle.steps.ready.promise.then(()=>{
+                return this.resolve();
+            }));
+        }
+
+        push(delegate: () => void | WinJS.Promise<any>) {
+            if (!this.resolved) {
+                this.items.push(delegate);
+            }else{
+                setImmediate(() => {
+                    this.page.promises.push(WinJS.Promise.as(delegate()));
+                })
+            }
+        }
+
+        resolve(){
+            this.resolved = true;
+            if (!this.items.length){
+                return WinJS.Promise.wrap();
+            }
+
+            logger.verbose("resolve deffered loads");
+            return WinJSContrib.Promise.waterfall(this.items, (job) =>{
+                return WinJS.Promise.as(job()).then(() => {
+                    return WinJS.Promise.timeout();
+                });
+            });
+        }
+    }
+
+    export class PageBase {
+        public eventTracker: WinJSContrib.UI.EventTracker;
+        public element: HTMLElement;
+        public promises: WinJS.Promise<any>[];
+        public defferedLoading: DefferedLoadings;
+        public pageLifeCycle: PageLifeCycle;
+        public parentedComplete: WinJS.Promise<any>;
+        public q: (selector: string) => Element;
+        public qAll: (selector: string) => Element[];
+        public addPromise: (prom: WinJS.Promise<any>) => void;
+    }
+
 	export class PageLifeCycleStep {
 		public promise: WinJS.Promise<any>;
 		public isDone: boolean;
 		public created: Date;
 		public resolved: Date;
 		public stepName: string;
+        public page: any;
 		_resolvePromise: any;
 		_rejectPromise: any;
 		public queue: Array<any>;
 
 		constructor(page, stepName, parent) {
+            this.page = page;
 			this.queue = [];
 			this.isDone = false;
 			this.stepName = stepName;
@@ -287,9 +380,10 @@ module WinJSContrib.UI.Pages {
 
                 if (verboseTraces) {
                     step.resolved = new Date();
-                    logger.verbose('resolved ' + step.stepName + '(' + (<any>step.resolved - <any>step.created) + 'ms) ');
+                    logger.verbose((<any>step.resolved - <any>step.created) + 'ms ' + step.stepName.toUpperCase() + ' ' + step.page.pageLifeCycle.profilerMarkIdentifier);
+                    profiler("WinJS.UI.Pages:" + step.stepName.toUpperCase() + step.page.pageLifeCycle.profilerMarkIdentifier + ",StartTM");
                 }
-
+                
 				return step.promise;
 			}
 
@@ -355,6 +449,9 @@ module WinJSContrib.UI.Pages {
                 /// </signature>
                 if (this._disposed) {
                     return;
+                }
+                if (this.disposePageMixin) {
+                    this.disposePageMixin();
                 }
 				this.pageLifeCycle.stop();
 				this.pageLifeCycle = null;
@@ -437,13 +534,29 @@ module WinJSContrib.UI.Pages {
 
 		function injectMixin(base, mixin) {
 			var d = base.prototype.dispose;
+			var dM = base.prototype.disposePageMixin;
+			var iM = base.prototype.initPageMixin;
 			base = _Base.Class.mix(base, mixin);
 
-			//we want to allow this mixins to provide their own addition to "dispose"
+			//we want to allow this mixins to provide their own addition to "dispose" and initialize custom properties
 			if (d && mixin.hasOwnProperty('dispose')) {
-				base.prototype.dispose = function () {
+				base.prototype.dispose = function() {
 					mixin.dispose.apply(this);
-					d.apply(this);					
+					if (d) d.apply(this);
+				};
+			} 
+
+			if (d && mixin.hasOwnProperty('disposePageMixin')) {
+				base.prototype.disposePageMixin = function() {
+					mixin.disposePageMixin.apply(this);
+					if (dM) dM.apply(this);					
+				};
+			}
+
+			if (d && mixin.hasOwnProperty('initPageMixin')) {
+				base.prototype.initPageMixin = function() {
+					mixin.initPageMixin.apply(this);
+					if (iM) iM.apply(this);
 				};
 			}
 
@@ -483,16 +596,19 @@ module WinJSContrib.UI.Pages {
 			element.style.display = 'none';
 
 			var profilerMarkIdentifier = " uri='" + uri + "'" + _BaseUtils._getProfilerMarkIdentifier(that.element);
+            that.pageLifeCycle.profilerMarkIdentifier = profilerMarkIdentifier;
 
 			_WriteProfilerMark("WinJS.UI.Pages:createPage" + profilerMarkIdentifier + ",StartTM");
 
 			if (WinJSContrib.UI.WebComponents) {
 				that.pageLifeCycle.observer = WinJSContrib.UI.WebComponents.watch(that.element);
 			}
-
+            
             var load = Promise.timeout().then(function Pages_load() {
+				that.pageLifeCycle.log(() => "URI loading " + that.pageLifeCycle.profilerMarkIdentifier);
                 return that.load(uri);
             }).then(function (loadResult) {
+                that.pageLifeCycle.log(() => "URI loaded " + that.pageLifeCycle.profilerMarkIdentifier);
                 //if page is defined by Js classes, call class constructors 
                 if (that._attachedConstructor) {
                     var realControl = new that._attachedConstructor(element, options);
@@ -511,7 +627,6 @@ module WinJSContrib.UI.Pages {
             });
 
 			var renderCalled = load.then(function Pages_init(loadResult) {
-
 				return Promise.join({
 					loadResult: loadResult,
 					initResult: that.init(element, options)
@@ -545,7 +660,7 @@ module WinJSContrib.UI.Pages {
 				WinJSContrib.UI.bindMembers(element, that);
 				return that.processed(element, options);
 			}).then(function () {
-				return that;
+                return that;
 			});
 
 			var callComplete = function () {
@@ -577,13 +692,14 @@ module WinJSContrib.UI.Pages {
 				that.ready(element, options);
 
 				that.pageLifeCycle.ended = new Date();
-				that.pageLifeCycle.delta = that.pageLifeCycle.ended - that.pageLifeCycle.created;
-                logger.debug('navigation to ' + uri + ' took ' + that.pageLifeCycle.delta + 'ms');
+				that.pageLifeCycle.delta = that.pageLifeCycle.ended - that.pageLifeCycle.created;                
 
 				//broadcast(that, element, 'pageReady', [element, options]);
 			}).then(function (result) {
 				return that.pageLifeCycle.steps.ready.resolve();
-			}).then(function () {
+            }).then(function(result) {
+                return that.pageLifeCycle.steps.enter.resolve();
+            }).then(function() {
 				return that;
 			}).then(
 				null,
@@ -642,14 +758,38 @@ module WinJSContrib.UI.Pages {
                     //
                     function PageControl_ctor(element, options, complete, parentedPromise) {
                         var that = this;
+
+						if (that._attachedConstructor) {
+							var realControl = new this._attachedConstructor(element, options);
+							element.winControl = realControl;
+							var keys = Object.keys(that);
+							keys.forEach(function(k) {
+								if (k !== "_attachedConstructor") {
+									realControl[k] = that[k];
+								}
+							});
+							
+							that = realControl;
+						}
+
 						var parent = WinJSContrib.Utils.getScopeControl(element);
 						_ElementUtilities.addClass(element, "win-disposable");
 						_ElementUtilities.addClass(element, "pagecontrol");
 						_ElementUtilities.addClass(element, "mcn-layout-ctrl");
 
-						that.pageLifeCycle = {
+						
+                        //that._eventTracker = new WinJSContrib.UI.EventTracker();
+                        that.promises = [];
+                        
+                        that.pageLifeCycle = <PageLifeCycle>{
 							created: new Date(),
 							location: uri,
+                            log : function(callback){
+                                if (verboseTraces){
+                                    var delta = <any>new Date() - this.created;
+                                    logger.verbose(delta + "ms " + callback());
+                                }
+                            },
 							stop: function () {
 								that.readyComplete.cancel();
 								that.cancelPromises();
@@ -663,20 +803,29 @@ module WinJSContrib.UI.Pages {
 								render: new PageLifeCycleStep(that, 'render', null),
 								process: new PageLifeCycleStep(that, 'process', parent),
 								layout: new PageLifeCycleStep(that, 'layout', parent),
-								ready: new PageLifeCycleStep(that, 'ready', parent)
+								ready: new PageLifeCycleStep(that, 'ready', parent),
+                                enter: new PageLifeCycleStep(that, 'enter', parent),
 							},
 							initialDisplay: null
 						};
 
-                        this._disposed = false;
-                        this.element = element = element || _Global.document.createElement("div");
+                        if (that.initPageMixin)
+                            that.initPageMixin();
+
+                        that.defferedLoading = new DefferedLoadings(that);
+
+                        that._disposed = false;
+                        that.element = element = element || _Global.document.createElement("div");
                         element.msSourceLocation = uri;
-                        this.uri = uri;
-                        this.selfhost = selfhost(uri);
-                        element.winControl = this;
+                        that.uri = uri;
+                        that.selfhost = selfhost(uri);
+                        element.winControl = that;
                         that.parentedComplete = parentedPromise;
 
-                        pageLifeCycle(this, uri, element, options, complete, parentedPromise);
+
+
+                        pageLifeCycle(that, uri, element, options, complete, parentedPromise);
+                        return that;
                     }, _mixinBase);
                 base = _Base.Class.mix(base, WinJS.UI.DOMEventMixin);
                 
@@ -738,6 +887,7 @@ module WinJSContrib.UI.Pages {
 
         function render(uri, element, options?, parentedPromise?) {
             var Ctor = _CorePages.get(uri);
+            loadedPages[abs(uri)] = true;
             var control = new Ctor(element, options, null, parentedPromise);
             return control.renderComplete.then(null, function (err) {
                 return Promise.wrapError({
